@@ -1,26 +1,31 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+/* Paleta: verde-cafezal como cor principal, terra para destaque, neutros quentes. */
+@theme {
+  --color-folha-50: #f1f7f3;
+  --color-folha-100: #dcebe1;
+  --color-folha-600: #2f6b4f;
+  --color-folha-700: #24553f;
+  --color-folha-800: #1c4332;
+  --color-folha-900: #143024;
+  --color-terra-500: #a0612f;
+  --color-terra-600: #874f24;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--color-stone-50);
+  color: var(--color-stone-900);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Números de relatório alinhados por coluna. */
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.neg {
+  color: var(--color-red-700);
 }

@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# dados reais importados da planilha (confidenciais)
+/data/
+!.env.example
+/.claude/
