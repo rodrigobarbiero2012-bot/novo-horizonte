@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cabecalho, Cartao } from "@/components/ui";
+import { Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
 import { balancoAnual, type BalancoAno } from "@/lib/contabil/relatorios";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { reaisCurto, reais } from "@/lib/formato";
@@ -60,11 +60,7 @@ async function Conteudo() {
           <tbody>
             {LINHAS.map((l, i) =>
               l.tipo === "secao" ? (
-                <tr key={i}>
-                  <td colSpan={anos.length + 1} className="sticky left-0 bg-white px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-folha-700">
-                    {l.rotulo}
-                  </td>
-                </tr>
+                <LinhaSecao key={i} rotulo={l.rotulo} colunas={anos.length} />
               ) : (
                 <tr key={i} className={l.tipo === "destaque" ? "bg-folha-50 font-semibold" : l.tipo === "total" ? "border-t border-stone-200 font-medium" : ""}>
                   <td className={`sticky left-0 px-4 py-1.5 ${l.tipo === "valor" ? "pl-7" : ""} ${l.tipo === "destaque" ? "bg-folha-50" : "bg-white"}`}>

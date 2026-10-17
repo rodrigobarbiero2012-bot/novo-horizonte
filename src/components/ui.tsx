@@ -22,6 +22,22 @@ export function Valor({ centavos, className = "" }: { centavos: number; classNam
   return <span className={`${centavos < 0 ? "neg" : ""} ${className}`}>{reais(centavos)}</span>;
 }
 
+/**
+ * Título de seção numa tabela de relatório com rolagem horizontal. O título
+ * fica só na primeira coluna (fixa à esquerda); uma célula que ocupasse a
+ * linha inteira não teria como ficar presa e sumiria ao rolar para o lado.
+ */
+export function LinhaSecao({ rotulo, colunas }: { rotulo: string; colunas: number }) {
+  return (
+    <tr>
+      <td className="sticky left-0 z-10 bg-white px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-folha-700">
+        {rotulo}
+      </td>
+      <td colSpan={colunas} className="bg-white" />
+    </tr>
+  );
+}
+
 /** Seletor de opções como links (mantém tudo server-side, sem JS). */
 export function Abas({ opcoes, atual }: { opcoes: { valor: string; rotulo: string; href: string }[]; atual: string }) {
   return (

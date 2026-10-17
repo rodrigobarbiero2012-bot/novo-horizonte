@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Abas, Cabecalho, Cartao } from "@/components/ui";
+import { Abas, Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
 import { fluxoAnual, fluxoMensal, LINHAS_FLUXO, type FluxoMes } from "@/lib/contabil/fluxo";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { MESES, reaisCurto } from "@/lib/formato";
@@ -26,9 +26,12 @@ async function Conteudo({ searchParams }: PageProps<"/fluxo-caixa">) {
   const rotuloColuna = (c: string) => (anoMensal ? MESES[Number(c) - 1] : c);
   const temAConciliar = colunas.some((c) => fluxo.get(c)!.aConciliar !== 0);
 
+  // A coluna fixa precisa de fundo opaco (o da linha, ou branco) para os números não aparecerem por trás ao rolar.
   const linha = (rotulo: string, chave: keyof FluxoMes, estilo = "", recuo = true) => (
     <tr key={rotulo} className={estilo}>
-      <td className={`sticky left-0 bg-inherit px-4 py-1.5 ${recuo ? "pl-7" : ""}`}>{rotulo}</td>
+      <td className={`sticky left-0 z-10 px-4 py-1.5 ${estilo.match(/\bbg-\S+/)?.[0] ?? "bg-white"} ${recuo ? "pl-7" : ""}`}>
+        {rotulo}
+      </td>
       {colunas.map((c) => {
         const v = fluxo.get(c)![chave];
         return (
@@ -69,11 +72,7 @@ async function Conteudo({ searchParams }: PageProps<"/fluxo-caixa">) {
           <tbody>
             {linha("Saldo inicial", "saldoInicial", "text-stone-500", false)}
             {GRUPOS.map((g) => [
-              <tr key={g.grupo}>
-                <td colSpan={colunas.length + 1} className="sticky left-0 bg-white px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-folha-700">
-                  {g.rotulo}
-                </td>
-              </tr>,
+              <LinhaSecao key={g.grupo} rotulo={g.rotulo} colunas={colunas.length} />,
               ...LINHAS_FLUXO.filter((l) => l.grupo === g.grupo).map((l) => linha(l.rotulo, l.chave)),
               linha(`Total ${g.rotulo.toLowerCase()}`, g.total, "border-t border-stone-200 font-medium bg-white", false),
             ])}

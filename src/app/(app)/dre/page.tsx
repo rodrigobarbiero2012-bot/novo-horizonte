@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cabecalho, Cartao } from "@/components/ui";
+import { Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
 import { dreAnual, type DreAno } from "@/lib/contabil/relatorios";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { percentual, reaisCurto } from "@/lib/formato";
@@ -69,13 +69,7 @@ async function Conteudo() {
           <tbody>
             {LINHAS.map((l, i) => {
               if (l.tipo === "secao") {
-                return (
-                  <tr key={i}>
-                    <td colSpan={anos.length + 1} className="sticky left-0 bg-white px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-folha-700">
-                      {l.rotulo}
-                    </td>
-                  </tr>
-                );
+                return <LinhaSecao key={i} rotulo={l.rotulo} colunas={anos.length} />;
               }
               const estilo =
                 l.tipo === "destaque"
