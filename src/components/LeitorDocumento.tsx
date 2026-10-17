@@ -6,7 +6,9 @@ import type { ResultadoLeitura } from "@/app/(app)/lancamentos/ler/acoes";
 import type { EstadoFormulario } from "@/app/(app)/lancamentos/acoes";
 import { TIPOS_DOCUMENTO, type DocumentoLido } from "@/lib/documentos/esquema";
 import { dataBr } from "@/lib/formato";
+import { categoriasDoTitulo } from "@/lib/titulos/categorias";
 import { FormularioLancamento, type LinhaForm } from "./FormularioLancamento";
+import { FormTitulo } from "./titulos/FormTitulo";
 import { botaoPrimario, botaoSecundario, Cartao } from "./ui";
 
 type Conta = { id: string; nome: string; categoria: string };
@@ -20,7 +22,7 @@ type Etapa =
   | { tipo: "escolher"; erro?: string }
   | { tipo: "lendo"; previa: Previa }
   | { tipo: "revisar"; previa: Previa; leitura: Extract<ResultadoLeitura, { ok: true }>; chave: number }
-  | { tipo: "gravado"; id: string };
+  | { tipo: "gravado"; id?: string; comoTitulo?: boolean };
 
 type Previa = { url: string; pdf: boolean; nome: string };
 
@@ -74,18 +76,25 @@ export function LeitorDocumento({ contas, ler, criar }: Props) {
     });
 
   const aoGravar = useCallback((id: string) => setEtapa({ tipo: "gravado", id }), []);
+  const aoCriarTitulo = useCallback(() => setEtapa({ tipo: "gravado", comoTitulo: true }), []);
 
   if (etapa.tipo === "gravado") {
     return (
       <Cartao className="max-w-xl p-6">
-        <p className="mb-4 font-medium text-folha-800">✓ Lançamento gravado.</p>
+        <p className="mb-4 font-medium text-folha-800">{etapa.comoTitulo ? "✓ Conta a pagar criada." : "✓ Lançamento gravado."}</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setEtapa({ tipo: "escolher" })} className={botaoPrimario}>
             Ler outro documento
           </button>
-          <Link href={`/lancamentos/${etapa.id}`} className={botaoSecundario}>
-            Ver lançamento
-          </Link>
+          {etapa.comoTitulo ? (
+            <Link href="/a-pagar-receber" className={botaoSecundario}>
+              Ver contas a pagar
+            </Link>
+          ) : (
+            <Link href={`/lancamentos/${etapa.id}`} className={botaoSecundario}>
+              Ver lançamento
+            </Link>
+          )}
         </div>
       </Cartao>
     );
@@ -162,20 +171,82 @@ export function LeitorDocumento({ contas, ler, criar }: Props) {
       ) : (
         <div className="space-y-4">
           <Resumo leitura={etapa.leitura} contas={contas} />
-          <Cartao className="p-5">
-            <h2 className="mb-3 font-semibold text-stone-800">Confira e grave o lançamento</h2>
-            <FormularioLancamento
-              key={etapa.chave}
-              contas={contas}
-              acao={criar}
-              origem="DOCUMENTO"
-              aoGravar={aoGravar}
-              inicial={montarInicial(etapa.leitura)}
-            />
-          </Cartao>
+          <Destino key={etapa.chave} leitura={etapa.leitura} contas={contas} criar={criar} aoGravar={aoGravar} aoCriarTitulo={aoCriarTitulo} />
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Boleto com vencimento a partir de hoje começa como "a pagar"; o resto
+ * (recibo, comprovante, boleto vencido) como "já pago". O sócio pode trocar.
+ */
+function Destino({
+  leitura,
+  contas,
+  criar,
+  aoGravar,
+  aoCriarTitulo,
+}: {
+  leitura: Extract<ResultadoLeitura, { ok: true }>;
+  contas: Conta[];
+  criar: Props["criar"];
+  aoGravar: (id: string) => void;
+  aoCriarTitulo: () => void;
+}) {
+  const d = leitura.documento;
+  const hoje = new Date().toLocaleDateString("sv-SE");
+  const [modo, setModo] = useState<"apagar" | "pago">(
+    (d.tipo === "boleto" || d.tipo === "nota_fiscal") && d.vencimento && d.vencimento >= hoje ? "apagar" : "pago",
+  );
+  const contasPagar = contas.filter((c) => categoriasDoTitulo("PAGAR").includes(c.categoria));
+
+  return (
+    <Cartao className="p-5">
+      <div className="mb-4 inline-flex rounded-lg border border-stone-200 bg-white p-1 text-sm">
+        {(
+          [
+            ["apagar", "A pagar no vencimento"],
+            ["pago", "Já foi pago"],
+          ] as const
+        ).map(([valor, rotulo]) => (
+          <button
+            key={valor}
+            type="button"
+            onClick={() => setModo(valor)}
+            className={`rounded-md px-3 py-1 ${modo === valor ? "bg-folha-700 text-white" : "text-stone-600 hover:bg-stone-100"}`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+      {modo === "apagar" ? (
+        <>
+          <p className="mb-3 text-sm text-stone-600">Entra em “A pagar e receber”; o lançamento é gerado quando você der baixa no pagamento.</p>
+          <FormTitulo
+            tipo="PAGAR"
+            contas={contasPagar}
+            origem="DOCUMENTO"
+            aoGravar={aoCriarTitulo}
+            inicial={{
+              descricao: (d.descricao || TIPOS_DOCUMENTO[d.tipo]) + (d.numeroDocumento ? ` — doc. ${d.numeroDocumento}` : ""),
+              contraparte: d.fornecedor ?? undefined,
+              valor: d.valor ? valorTexto(d.valor) : undefined,
+              vencimento: d.vencimento ?? undefined,
+              contaId: contasPagar.some((c) => c.id === leitura.contaDebitoId) ? (leitura.contaDebitoId ?? undefined) : undefined,
+              numeroDocumento: d.numeroDocumento ?? undefined,
+              linhaDigitavel: d.linhaDigitavel ?? undefined,
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <p className="mb-3 text-sm text-stone-600">Grava o lançamento do pagamento agora.</p>
+          <FormularioLancamento contas={contas} acao={criar} origem="DOCUMENTO" aoGravar={aoGravar} inicial={montarInicial(leitura)} />
+        </>
+      )}
+    </Cartao>
   );
 }
 

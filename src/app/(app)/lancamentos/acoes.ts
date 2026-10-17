@@ -143,6 +143,11 @@ export async function excluirLancamento(id: string) {
   const usuario = await exigirUsuario();
   await prisma.$transaction(async (tx) => {
     const antes = await tx.lancamento.findUniqueOrThrow({ where: { id }, include: { partidas: true } });
+    // Lançamento gerado pela baixa de uma conta a pagar/receber: o título volta a ficar em aberto.
+    await tx.titulo.updateMany({
+      where: { lancamentoId: id },
+      data: { status: "ABERTO", baixadoEm: null, valorBaixaCentavos: null, contaBaixaId: null, lancamentoId: null },
+    });
     await tx.lancamento.delete({ where: { id } });
     await tx.registroAuditoria.create({
       data: { usuarioId: usuario.id, entidade: "Lancamento", entidadeId: id, acao: "EXCLUIR", antes: fotografia(antes) },

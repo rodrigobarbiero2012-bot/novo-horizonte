@@ -1,0 +1,147 @@
+"use server";
+
+import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/db";
+import { lerValorBr } from "@/lib/contabil/lancamento";
+import { CATEGORIAS_BAIXA, categoriasDoTitulo } from "@/lib/titulos/categorias";
+import { gerarParcelas, partidasDaBaixa, type TipoTitulo } from "@/lib/titulos/regras";
+import { exigirUsuario } from "@/lib/usuario";
+
+export type EstadoTitulo = { erro?: string; ok?: string } | undefined;
+
+const dataValida = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+const revalidar = () => {
+  revalidatePath("/a-pagar-receber");
+  revalidatePath("/");
+};
+
+export async function criarTitulo(_: EstadoTitulo, form: FormData): Promise<EstadoTitulo> {
+  const usuario = await exigirUsuario();
+  const tipo = form.get("tipo") === "RECEBER" ? "RECEBER" : "PAGAR";
+  const descricao = String(form.get("descricao") ?? "").trim();
+  const contraparte = String(form.get("contraparte") ?? "").trim() || null;
+  const vencimento = String(form.get("vencimento") ?? "");
+  const contaId = String(form.get("contaId") ?? "");
+  const valor = lerValorBr(String(form.get("valor") ?? ""));
+  const parcelas = Math.trunc(Number(form.get("parcelas") ?? 1));
+  const origem = form.get("origem") === "DOCUMENTO" ? "DOCUMENTO" : "MANUAL";
+
+  if (!descricao) return { erro: "Informe a descrição." };
+  if (valor === null || Number.isNaN(valor) || valor <= 0) return { erro: "Informe um valor maior que zero." };
+  if (!dataValida(vencimento)) return { erro: "Vencimento inválido." };
+  if (!(parcelas >= 1 && parcelas <= 60)) return { erro: "Parcelas: de 1 a 60." };
+  const conta = await prisma.conta.findUnique({ where: { id: contaId } });
+  if (!conta || !categoriasDoTitulo(tipo).includes(conta.categoria)) return { erro: "Escolha a conta." };
+
+  const grupoParcelasId = parcelas > 1 ? randomUUID() : null;
+  const dados = gerarParcelas(valor, parcelas, vencimento).map((p) => ({
+    tipo,
+    descricao,
+    contraparte,
+    valorCentavos: p.valorCentavos,
+    vencimento: new Date(p.vencimento),
+    contaId,
+    numeroDocumento: String(form.get("numeroDocumento") ?? "").trim() || null,
+    linhaDigitavel: String(form.get("linhaDigitavel") ?? "").trim() || null,
+    grupoParcelasId,
+    parcela: parcelas > 1 ? p.parcela : null,
+    totalParcelas: parcelas > 1 ? parcelas : null,
+    origem,
+    criadoPorId: usuario.id,
+  }));
+  await prisma.$transaction(async (tx) => {
+    await tx.titulo.createMany({ data: dados });
+    await tx.registroAuditoria.create({
+      data: {
+        usuarioId: usuario.id,
+        entidade: "Titulo",
+        entidadeId: grupoParcelasId ?? "avulso",
+        acao: "CRIAR",
+        depois: { tipo, descricao, contraparte, valorCentavos: valor, vencimento, parcelas, conta: conta.nome },
+      },
+    });
+  });
+  revalidar();
+  const rotulo = tipo === "PAGAR" ? "Conta a pagar" : "Conta a receber";
+  return { ok: parcelas > 1 ? `${rotulo} criada em ${parcelas} parcelas.` : `${rotulo} criada.` };
+}
+
+/** Paga ou recebe o título: gera o lançamento e liga os dois. */
+export async function baixarTitulo(id: string, _: EstadoTitulo, form: FormData): Promise<EstadoTitulo> {
+  const usuario = await exigirUsuario();
+  const data = String(form.get("data") ?? "");
+  const contaBaixaId = String(form.get("contaBaixaId") ?? "");
+  const valor = lerValorBr(String(form.get("valor") ?? ""));
+  if (!dataValida(data)) return { erro: "Data inválida." };
+  if (valor === null || Number.isNaN(valor) || valor <= 0) return { erro: "Valor inválido." };
+  const contaBaixa = await prisma.conta.findUnique({ where: { id: contaBaixaId } });
+  if (!contaBaixa || !CATEGORIAS_BAIXA.includes(contaBaixa.categoria)) return { erro: "Escolha de onde sai (ou entra) o dinheiro." };
+
+  const erro = await prisma.$transaction(async (tx) => {
+    const t = await tx.titulo.findUnique({ where: { id } });
+    if (!t || t.status !== "ABERTO") return "Este título não está em aberto.";
+    const tipo = t.tipo as TipoTitulo;
+    const parcela = t.parcela ? ` (${t.parcela}/${t.totalParcelas})` : "";
+    const quando = new Date(data);
+    const lancamento = await tx.lancamento.create({
+      data: {
+        data: quando,
+        historico: `${tipo === "PAGAR" ? "pgto" : "receb."} ${t.descricao}${t.contraparte ? ` — ${t.contraparte}` : ""}${parcela}`,
+        origem: "TITULO",
+        criadoPorId: usuario.id,
+        atualizadoPorId: usuario.id,
+        partidas: { create: partidasDaBaixa(tipo, t.contaId, contaBaixaId, valor).map((p) => ({ ...p, data: quando })) },
+      },
+    });
+    await tx.titulo.update({
+      where: { id },
+      data: { status: "BAIXADO", baixadoEm: quando, valorBaixaCentavos: valor, contaBaixaId, lancamentoId: lancamento.id },
+    });
+    await tx.registroAuditoria.create({
+      data: { usuarioId: usuario.id, entidade: "Titulo", entidadeId: id, acao: "BAIXAR", depois: { data, valorCentavos: valor, conta: contaBaixa.nome, lancamentoId: lancamento.id } },
+    });
+    return null;
+  });
+  if (erro) return { erro };
+  revalidar();
+  revalidatePath("/lancamentos");
+  return { ok: "Baixa registrada e lançamento gerado." };
+}
+
+/** Desfaz a baixa: apaga o lançamento gerado e reabre o título. */
+export async function estornarBaixa(id: string) {
+  const usuario = await exigirUsuario();
+  await prisma.$transaction(async (tx) => {
+    const t = await tx.titulo.findUnique({ where: { id } });
+    if (!t || t.status !== "BAIXADO") return;
+    await tx.titulo.update({
+      where: { id },
+      data: { status: "ABERTO", baixadoEm: null, valorBaixaCentavos: null, contaBaixaId: null, lancamentoId: null },
+    });
+    if (t.lancamentoId) await tx.lancamento.delete({ where: { id: t.lancamentoId } });
+    await tx.registroAuditoria.create({
+      data: { usuarioId: usuario.id, entidade: "Titulo", entidadeId: id, acao: "ESTORNAR_BAIXA", antes: { lancamentoId: t.lancamentoId } },
+    });
+  });
+  revalidar();
+  revalidatePath("/lancamentos");
+}
+
+/** Exclui um título em aberto (lançado por engano). Títulos baixados precisam do estorno antes. */
+export async function excluirTitulo(id: string) {
+  const usuario = await exigirUsuario();
+  const t = await prisma.titulo.findUnique({ where: { id } });
+  if (!t || t.status !== "ABERTO") return;
+  await prisma.titulo.delete({ where: { id } });
+  await prisma.registroAuditoria.create({
+    data: {
+      usuarioId: usuario.id,
+      entidade: "Titulo",
+      entidadeId: id,
+      acao: "EXCLUIR",
+      antes: { descricao: t.descricao, valorCentavos: t.valorCentavos, vencimento: t.vencimento.toISOString().slice(0, 10) },
+    },
+  });
+  revalidar();
+}

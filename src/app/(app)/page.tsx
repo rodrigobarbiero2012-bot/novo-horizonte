@@ -14,7 +14,7 @@ import { exigirUsuario } from "@/lib/usuario";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, cotacoes, contas, recentes, semSenha] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     resumoCotacoes(),
@@ -25,6 +25,10 @@ async function Conteudo() {
       include: { partidas: { select: { valorCentavos: true } } },
     }),
     prisma.usuario.findMany({ where: { senhaHash: null }, select: { nome: true } }),
+    prisma.titulo.findMany({
+      where: { status: "ABERTO", tipo: "PAGAR", vencimento: { lte: new Date(Date.parse(new Date().toLocaleDateString("sv-SE")) + 7 * 86_400_000) } },
+      select: { valorCentavos: true, vencimento: true },
+    }),
   ]);
 
   // Período: do início do ano até o último lançamento, contra o mesmo período do ano anterior.
@@ -53,6 +57,9 @@ async function Conteudo() {
   const balanco = balancoAnual(partidas, anos);
   const anosSemFechar = anos.filter((a) => balanco.get(a)!.diferenca !== 0);
   const anosSemJuros = anos.filter((a) => a > anos[0] && balanco.get(a)!.emprestimos > 0 && dre.get(a)!.despesasFinanceiras === 0);
+  const vencidos = aPagarProximos.filter((t) => t.vencimento.toISOString().slice(0, 10) < hoje);
+  const daSemana = aPagarProximos.filter((t) => t.vencimento.toISOString().slice(0, 10) >= hoje);
+  const somaTitulos = (ts: { valorCentavos: number }[]) => reais(ts.reduce((s, t) => s + t.valorCentavos, 0));
   const totalCustos = r.custeio + r.despesas;
   const maiorCusto = Math.max(1, ...custos.map((c) => c.valor));
   const maiorAtividade = Math.max(1, ...mix.atividades.map((a) => Math.max(a.receita, a.custeio)));
@@ -86,6 +93,26 @@ async function Conteudo() {
       <Cartao className="mb-6 border-amber-300 bg-amber-50/60 p-4">
         <h2 className="mb-2 text-sm font-semibold text-amber-900">⚠ Pontos de atenção</h2>
         <ul className="space-y-1.5 text-sm text-amber-900">
+          {(vencidos.length > 0 || daSemana.length > 0) && (
+            <li>
+              <strong>Contas a pagar:</strong>{" "}
+              {vencidos.length > 0 && (
+                <span className="font-semibold text-red-700">
+                  {vencidos.length} vencida{vencidos.length > 1 ? "s" : ""} (R$ {somaTitulos(vencidos)})
+                </span>
+              )}
+              {vencidos.length > 0 && daSemana.length > 0 && " e "}
+              {daSemana.length > 0 && (
+                <>
+                  {daSemana.length} vencendo nos próximos 7 dias (R$ {somaTitulos(daSemana)})
+                </>
+              )}
+              .{" "}
+              <Link href="/a-pagar-receber" className="underline">
+                Ver contas
+              </Link>
+            </li>
+          )}
           <li>
             <strong>Dados de produção pendentes — confirmar:</strong> sacas de café colhidas por ano, área plantada (ha), caixas/kg de
             maracujá vendidos e cabeças de gado. Sem eles o painel não calcula custo por saca, produtividade nem margem por unidade

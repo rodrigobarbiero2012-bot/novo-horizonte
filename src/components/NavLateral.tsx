@@ -8,6 +8,7 @@ type Item = { href: string; rotulo: string } | { grupo: string; itens: { href: s
 const ITENS: Item[] = [
   { href: "/", rotulo: "Painel" },
   { href: "/lancamentos", rotulo: "Lançamentos" },
+  { href: "/a-pagar-receber", rotulo: "A pagar e receber" },
   { href: "/dre", rotulo: "DRE" },
   { href: "/balanco", rotulo: "Balanço" },
   { href: "/fluxo-caixa", rotulo: "Fluxo de caixa" },

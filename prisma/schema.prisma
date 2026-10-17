@@ -23,10 +23,10 @@ model Usuario {
   conviteHash     String?   @unique
   conviteExpiraEm DateTime?
 
-  lancamentosCriados    Lancamento[]         @relation("criadoPor")
-  lancamentosAlterados  Lancamento[]         @relation("atualizadoPor")
-  registrosDeAuditoria  RegistroAuditoria[]
-  tarefasConcluidas     TarefaCronograma[]
+  lancamentosCriados   Lancamento[]        @relation("criadoPor")
+  lancamentosAlterados Lancamento[]        @relation("atualizadoPor")
+  registrosDeAuditoria RegistroAuditoria[]
+  tarefasConcluidas    TarefaCronograma[]
 }
 
 // Plano de contas. `categoria` e `atividade` usam os mesmos textos da planilha
@@ -43,6 +43,8 @@ model Conta {
 
   apelidos ContaApelido[]
   partidas Partida[]
+  titulos  Titulo[]       @relation("contaDoTitulo")
+  baixas   Titulo[]       @relation("contaDaBaixa")
 }
 
 // Grafias antigas com que a conta aparece na planilha ("cc acm", "CC ACM"…),
@@ -73,6 +75,7 @@ model Lancamento {
   atualizadoEm    DateTime @updatedAt
 
   partidas Partida[]
+  titulo   Titulo?
 
   @@index([data])
   @@index([origem])
@@ -112,6 +115,37 @@ model Cotacao {
 
   @@unique([produto, data])
   @@index([produto, data])
+}
+
+// Contas a pagar e a receber. A baixa (pagamento/recebimento) gera um
+// Lancamento: débito/crédito na conta do título contra a conta de pagamento.
+model Titulo {
+  id                 String      @id @default(cuid())
+  tipo               String // "PAGAR" | "RECEBER"
+  descricao          String
+  contraparte        String? // fornecedor (pagar) ou cliente (receber)
+  valorCentavos      Int // sempre positivo
+  vencimento         DateTime    @db.Date
+  contaId            String // despesa/custeio/ativo/passivo (pagar) ou receita (receber)
+  conta              Conta       @relation("contaDoTitulo", fields: [contaId], references: [id])
+  numeroDocumento    String?
+  linhaDigitavel     String?
+  grupoParcelasId    String? // mesmo valor em todas as parcelas de um parcelamento
+  parcela            Int?
+  totalParcelas      Int?
+  status             String      @default("ABERTO") // "ABERTO" | "BAIXADO" | "CANCELADO"
+  baixadoEm          DateTime?   @db.Date
+  valorBaixaCentavos Int?
+  contaBaixaId       String?
+  contaBaixa         Conta?      @relation("contaDaBaixa", fields: [contaBaixaId], references: [id])
+  lancamentoId       String?     @unique
+  lancamento         Lancamento? @relation(fields: [lancamentoId], references: [id])
+  origem             String      @default("MANUAL") // "MANUAL" | "DOCUMENTO"
+  criadoPorId        String?
+  criadoEm           DateTime    @default(now())
+
+  @@index([status, vencimento])
+  @@index([grupoParcelasId])
 }
 
 // Cronograma de produção: tarefas por atividade e ano, com checklist.
