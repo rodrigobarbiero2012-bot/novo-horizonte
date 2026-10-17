@@ -26,6 +26,7 @@ model Usuario {
   lancamentosCriados    Lancamento[]         @relation("criadoPor")
   lancamentosAlterados  Lancamento[]         @relation("atualizadoPor")
   registrosDeAuditoria  RegistroAuditoria[]
+  tarefasConcluidas     TarefaCronograma[]
 }
 
 // Plano de contas. `categoria` e `atividade` usam os mesmos textos da planilha
@@ -111,6 +112,26 @@ model Cotacao {
 
   @@unique([produto, data])
   @@index([produto, data])
+}
+
+// Cronograma de produção: tarefas por atividade e ano, com checklist.
+// Cada ano nasce de um modelo (src/lib/cronograma/modelos.ts) e é editável.
+model TarefaCronograma {
+  id             String    @id @default(cuid())
+  atividade      String // "CAFE" | "MARACUJA" | "PECUARIA"
+  ano            Int
+  etapa          String
+  titulo         String
+  mesInicio      Int // 1–12
+  mesFim         Int // 1–12, >= mesInicio
+  ordem          Int
+  concluida      Boolean   @default(false)
+  concluidaEm    DateTime?
+  concluidaPorId String?
+  concluidaPor   Usuario?  @relation(fields: [concluidaPorId], references: [id])
+  criadoEm       DateTime  @default(now())
+
+  @@index([atividade, ano])
 }
 
 // Quem fez o quê: toda criação, alteração e exclusão de lançamento ou conta.
