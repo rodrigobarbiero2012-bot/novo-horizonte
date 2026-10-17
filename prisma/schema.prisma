@@ -98,6 +98,21 @@ model Partida {
   @@index([lancamentoId])
 }
 
+// Cotações de mercado, uma por produto por dia. As automáticas vêm do cron
+// diário (src/app/api/cron/cotacoes); o maracujá é registrado à mão no painel.
+model Cotacao {
+  id           String   @id @default(cuid())
+  produto      String // chave de PRODUTOS em src/lib/cotacoes/produtos.ts
+  data         DateTime @db.Date
+  valor        Float
+  origem       String // "AUTOMATICA" | "MANUAL"
+  criadoPorId  String?
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([produto, data])
+  @@index([produto, data])
+}
+
 // Quem fez o quê: toda criação, alteração e exclusão de lançamento ou conta.
 model RegistroAuditoria {
   id         String   @id @default(cuid())

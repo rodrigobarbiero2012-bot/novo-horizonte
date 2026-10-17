@@ -1,119 +1,227 @@
 import Link from "next/link";
-import { Cabecalho, Cartao, Valor, botaoPrimario } from "@/components/ui";
+import { Cabecalho, Cartao, botaoPrimario } from "@/components/ui";
+import { Pagina } from "@/components/Pagina";
+import { CartaoCotacao } from "@/components/painel/CartaoCotacao";
+import { GraficoMensal } from "@/components/painel/GraficoMensal";
+import { Indicador, textoComparacao } from "@/components/painel/Indicador";
+import { dividaEm, maioresCustos, mixAtividades, resumoPeriodo, ultimos12Meses, umAnoAntes, variacao } from "@/lib/contabil/painel";
 import { balancoAnual, dreAnual } from "@/lib/contabil/relatorios";
-import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
+import { anosComMovimento, contasAtivas, partidasDoRazao, resumoCotacoes } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
-import { Pagina } from "@/components/Pagina";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, recentes] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
+    resumoCotacoes(),
+    contasAtivas(),
     prisma.lancamento.findMany({
       orderBy: [{ data: "desc" }, { criadoEm: "desc" }],
-      take: 8,
-      include: { partidas: { select: { valorCentavos: true } }, criadoPor: { select: { nome: true } } },
+      take: 6,
+      include: { partidas: { select: { valorCentavos: true } } },
     }),
+    prisma.usuario.findMany({ where: { senhaHash: null }, select: { nome: true } }),
   ]);
+
+  // Período: do início do ano até o último lançamento, contra o mesmo período do ano anterior.
+  const hoje = new Date().toLocaleDateString("sv-SE");
+  const ano = anos.at(-1)!;
+  const ultimaData = partidas.reduce((m, p) => (p.data > m ? p.data : m), "");
+  const fim = ultimaData.startsWith(String(ano)) ? ultimaData : `${ano}-01-01`;
+  const atual = { inicio: `${ano}-01-01`, fim };
+  const anterior = { inicio: `${ano - 1}-01-01`, fim: umAnoAntes(fim) };
+  const refAnterior = `01/01–${dataBr(anterior.fim).slice(0, 5)} de ${ano - 1}`;
+
+  const r = resumoPeriodo(partidas, atual);
+  const ra = resumoPeriodo(partidas, anterior);
+  const mix = mixAtividades(partidas, atual);
+  const custos = maioresCustos(partidas, atual, anterior);
+  const meses = ultimos12Meses(partidas, fim.slice(0, 7));
+  const divida = dividaEm(partidas, fim);
+  const dividaFimAnoAnterior = dividaEm(partidas, `${ano - 1}-12-31`);
+  // Receita dos 12 meses até `fim`: do dia seguinte a "um ano antes" até `fim`.
+  const inicio12m = new Date(Date.parse(umAnoAntes(fim)) + 86_400_000).toISOString().slice(0, 10);
+  const receita12m = resumoPeriodo(partidas, { inicio: inicio12m, fim }).receita;
+  const idDaConta = new Map(contas.map((c) => [c.nome, c.id]));
+
+  // Alertas
   const dre = dreAnual(partidas, anos);
   const balanco = balancoAnual(partidas, anos);
-  const anoAtual = anos.at(-1)!;
-  const d = dre.get(anoAtual)!;
-  const b = balanco.get(anoAtual)!;
-  const ultimosAnos = anos.slice(-6);
-  const maiorReceita = Math.max(...ultimosAnos.map((a) => Math.max(dre.get(a)!.totalReceita, -dre.get(a)!.totalCusteio)), 1);
-  const anosQueNaoFecham = anos.filter((a) => balanco.get(a)!.diferenca !== 0);
-
-  const indicadores = [
-    { rotulo: `Receita ${anoAtual}`, valor: d.totalReceita },
-    { rotulo: `Custeio ${anoAtual}`, valor: d.totalCusteio },
-    { rotulo: `Resultado ${anoAtual}`, valor: d.resultado, nota: `margem ${percentual(d.resultado, d.totalReceita)}` },
-    { rotulo: "Dívida bancária", valor: b.emprestimos },
-    { rotulo: "Bancos + aplicações", valor: b.caixaBancos + b.aplicacoes },
-  ];
+  const anosSemFechar = anos.filter((a) => balanco.get(a)!.diferenca !== 0);
+  const anosSemJuros = anos.filter((a) => a > anos[0] && balanco.get(a)!.emprestimos > 0 && dre.get(a)!.despesasFinanceiras === 0);
+  const totalCustos = r.custeio + r.despesas;
+  const maiorCusto = Math.max(1, ...custos.map((c) => c.valor));
+  const maiorAtividade = Math.max(1, ...mix.atividades.map((a) => Math.max(a.receita, a.custeio)));
 
   return (
     <>
-      <Cabecalho titulo={`Olá, ${usuario.nome.split(" ")[0]}`} subtitulo={`Situação do sítio em ${anoAtual} (parcial, até o último lançamento).`}>
+      <Cabecalho
+        titulo={`Olá, ${usuario.nome.split(" ")[0]}`}
+        subtitulo={`${ano} acumulado até ${dataBr(fim)} (último lançamento), comparado com o mesmo período de ${ano - 1}.`}
+      >
         <Link href="/lancamentos/novo" className={botaoPrimario}>
           Novo lançamento
         </Link>
       </Cabecalho>
 
+      {/* 1. Como está o ano */}
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Indicador rotulo="Receita" centavos={r.receita} comparacao={textoComparacao(variacao(r.receita, ra.receita), refAnterior)} />
+        <Indicador rotulo="Custeio + despesas" centavos={totalCustos} comparacao={textoComparacao(variacao(totalCustos, ra.custeio + ra.despesas), refAnterior)} />
+        <Indicador
+          rotulo="Resultado"
+          centavos={r.resultado}
+          comparacao={`margem ${percentual(r.resultado, r.receita)} · em ${ano - 1}: ${reaisCurto(ra.resultado)}`}
+        />
+        <Indicador rotulo="Aportes dos sócios" centavos={r.aportesSocio} comparacao={`em ${ano - 1} no mesmo período: ${reaisCurto(ra.aportesSocio)}`} />
+        <Indicador
+          rotulo="Dívida bancária"
+          centavos={divida}
+          comparacao={textoComparacao(variacao(divida, dividaFimAnoAnterior), `31/12/${ano - 1}`)}
+          nota={`${percentual(divida, receita12m)} da receita dos últimos 12 meses`}
+        />
+      </div>
+
+      {/* 5. O que pede atenção */}
+      <Cartao className="mb-6 border-amber-300 bg-amber-50/60 p-4">
+        <h2 className="mb-2 text-sm font-semibold text-amber-900">⚠ Pontos de atenção</h2>
+        <ul className="space-y-1.5 text-sm text-amber-900">
+          <li>
+            <strong>Dados de produção pendentes — confirmar:</strong> sacas de café colhidas por ano, área plantada (ha), caixas/kg de
+            maracujá vendidos e cabeças de gado. Sem eles o painel não calcula custo por saca, produtividade nem margem por unidade
+            frente às cotações.
+          </li>
+          {anosSemFechar.length > 0 && (
+            <li>
+              Balanço não fecha em {anosSemFechar.join(" e ")} — datas de lançamento em ano errado.{" "}
+              <Link href="/balanco" className="underline">
+                Ver balanço
+              </Link>
+            </li>
+          )}
+          {anosSemJuros.length > 0 && (
+            <li>Nenhum juro lançado em {anosSemJuros.join(", ")}, embora houvesse dívida bancária: o resultado desses anos pode estar superestimado.</li>
+          )}
+          {semSenha.length > 0 && (
+            <li>
+              Convite pendente: {semSenha.map((u) => u.nome).join(", ")} ainda não definiu a senha.{" "}
+              <Link href="/convites" className="underline">
+                Convidar sócio
+              </Link>
+            </li>
+          )}
+        </ul>
+      </Cartao>
+
+      {/* 4. Cotações */}
+      <h2 className="mb-2 font-semibold text-stone-800">Cotações</h2>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {indicadores.map((i) => (
-          <Cartao key={i.rotulo} className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{i.rotulo}</p>
-            <p className="mt-1 text-xl font-semibold tabular-nums">
-              <Valor centavos={i.valor} />
-            </p>
-            {i.nota && <p className="text-xs text-stone-500">{i.nota}</p>}
-          </Cartao>
+        {cotacoes.map((c) => (
+          <CartaoCotacao key={c.produto} cotacao={c} hoje={hoje} />
         ))}
       </div>
 
-      {anosQueNaoFecham.length > 0 && (
-        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Pendência na base histórica: o balanço não fecha em {anosQueNaoFecham.join(" e ")} (datas de lançamento em ano
-          errado). <Link href="/balanco" className="underline">Ver balanço</Link>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* 2. De onde vem e para onde vai */}
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Cartao className="p-5">
-          <h2 className="mb-4 font-semibold text-stone-800">Receita × custeio — últimos anos</h2>
-          <div className="space-y-3">
-            {ultimosAnos.map((a) => {
-              const x = dre.get(a)!;
-              return (
-                <div key={a} className="grid grid-cols-[3rem_1fr_6rem] items-center gap-3 text-sm">
-                  <span className="tabular-nums text-stone-500">{a}</span>
-                  <div className="space-y-1">
-                    <div className="h-2.5 rounded-full bg-folha-600" style={{ width: `${(x.totalReceita / maiorReceita) * 100}%` }} title={`Receita R$ ${reais(x.totalReceita)}`} />
-                    <div className="h-2.5 rounded-full bg-terra-500" style={{ width: `${(-x.totalCusteio / maiorReceita) * 100}%` }} title={`Custeio R$ ${reais(-x.totalCusteio)}`} />
-                  </div>
-                  <span className={`num text-sm font-medium ${x.resultado < 0 ? "neg" : "text-folha-700"}`}>{reaisCurto(x.resultado)}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 flex gap-4 text-xs text-stone-500">
-            <span className="flex items-center gap-1.5"><span className="h-2 w-3 rounded-full bg-folha-600" />Receita</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-3 rounded-full bg-terra-500" />Custeio</span>
-            <span>À direita: resultado do ano</span>
-          </div>
+          <h2 className="mb-1 font-semibold text-stone-800">Resultado por atividade — {ano}</h2>
+          <p className="mb-4 text-xs text-stone-500">Receita e custeio direto de cada atividade; a margem não inclui custos gerais.</p>
+          <table className="w-full text-sm">
+            <thead className="text-xs text-stone-500">
+              <tr>
+                <th className="pb-2 text-left font-medium">Atividade</th>
+                <th className="pb-2 text-right font-medium">Receita</th>
+                <th className="pb-2 text-right font-medium">Custeio</th>
+                <th className="pb-2 text-right font-medium">Margem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mix.atividades.map((a) => (
+                <tr key={a.atividade} className="border-t border-stone-100 align-top">
+                  <td className="py-2">
+                    <span className="font-medium text-stone-800">{a.atividade}</span>
+                    <span className="mt-1 block h-1.5 rounded-full bg-folha-600" style={{ width: `${(a.receita / maiorAtividade) * 100}%` }} />
+                    <span className="mt-0.5 block text-[11px] text-stone-500">{percentual(a.receita, r.receita)} da receita</span>
+                  </td>
+                  <td className="num py-2">{reaisCurto(a.receita)}</td>
+                  <td className="num py-2">{reaisCurto(a.custeio)}</td>
+                  <td className="num py-2 font-medium">
+                    <span className={a.margem < 0 ? "neg" : ""}>{reaisCurto(a.margem)}</span>
+                    <span className="block text-[11px] font-normal text-stone-500">{percentual(a.margem, a.receita)}</span>
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t border-stone-200 text-stone-600">
+                <td className="py-2">Custos gerais e despesas (não alocados)</td>
+                <td />
+                <td className="num py-2">{reaisCurto(mix.naoAlocado)}</td>
+                <td className="num py-2 neg">{reaisCurto(-mix.naoAlocado)}</td>
+              </tr>
+            </tbody>
+          </table>
         </Cartao>
 
         <Cartao className="p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold text-stone-800">Últimos lançamentos</h2>
-            <Link href="/lancamentos" className="text-sm text-folha-700 hover:underline">Ver todos</Link>
-          </div>
-          <ul className="divide-y divide-stone-100 text-sm">
-            {recentes.map((l) => {
-              const valor = l.partidas.reduce((s, p) => s + Math.max(p.valorCentavos, 0), 0);
+          <h2 className="mb-1 font-semibold text-stone-800">Maiores custos — {ano}</h2>
+          <p className="mb-4 text-xs text-stone-500">Contas de custeio e despesa, com a variação sobre o mesmo período de {ano - 1}.</p>
+          <ul className="space-y-3 text-sm">
+            {custos.map((c) => {
+              const v = variacao(c.valor, c.anterior);
               return (
-                <li key={l.id}>
-                  <Link
-                    href={`/lancamentos/${l.id}`}
-                    title={l.historico ?? undefined}
-                    className="flex items-start justify-between gap-3 py-2 hover:bg-folha-50/60"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block tabular-nums text-stone-500">{dataBr(l.data)}</span>
-                      <span className="block truncate text-stone-700">{l.historico}</span>
+                <li key={c.conta}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <Link href={`/lancamentos?conta=${idDaConta.get(c.conta) ?? ""}&de=${atual.inicio}`} className="truncate text-stone-800 hover:underline">
+                      {c.conta}
+                    </Link>
+                    <span className="num shrink-0 font-medium">{reaisCurto(c.valor)}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-3">
+                    <span className="h-1.5 rounded-full bg-folha-600" style={{ width: `${(c.valor / maiorCusto) * 100}%` }} />
+                    <span className="shrink-0 text-[11px] text-stone-500">
+                      {percentual(c.valor, totalCustos)} do total · {v === null ? `sem gasto em ${ano - 1}` : `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toLocaleString("pt-BR", { style: "percent", maximumFractionDigits: 0 })}`}
                     </span>
-                    <span className="num shrink-0 font-medium">{reais(valor)}</span>
-                  </Link>
+                  </div>
                 </li>
               );
             })}
           </ul>
         </Cartao>
       </div>
+
+      {/* 3. Caixa mês a mês */}
+      <Cartao className="mb-6 p-5">
+        <h2 className="mb-1 font-semibold text-stone-800">Receitas × gastos — últimos 12 meses</h2>
+        <p className="mb-4 text-xs text-stone-500">Passe o mouse sobre um mês para ver os valores.</p>
+        <GraficoMensal meses={meses} />
+      </Cartao>
+
+      <Cartao className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold text-stone-800">Últimos lançamentos</h2>
+          <Link href="/lancamentos" className="text-sm text-folha-700 hover:underline">
+            Ver todos
+          </Link>
+        </div>
+        <ul className="divide-y divide-stone-100 text-sm">
+          {recentes.map((l) => {
+            const valor = l.partidas.reduce((s, p) => s + Math.max(p.valorCentavos, 0), 0);
+            return (
+              <li key={l.id}>
+                <Link href={`/lancamentos/${l.id}`} title={l.historico ?? undefined} className="flex items-start justify-between gap-3 py-2 hover:bg-folha-50/60">
+                  <span className="min-w-0 flex-1">
+                    <span className="block tabular-nums text-stone-500">{dataBr(l.data)}</span>
+                    <span className="block truncate text-stone-700">{l.historico}</span>
+                  </span>
+                  <span className="num shrink-0 font-medium">{reais(valor)}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </Cartao>
     </>
   );
 }

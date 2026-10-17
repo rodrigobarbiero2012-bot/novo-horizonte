@@ -17,7 +17,9 @@
     "producao:migrar": "tsx --env-file=.env.producao scripts/migrar-neon.ts",
     "producao:importar": "tsx --env-file=.env.producao scripts/importar.ts",
     "producao:conferir": "tsx --env-file=.env.producao scripts/conferir-banco.ts",
-    "producao:criar-usuario": "tsx --env-file=.env.producao scripts/criar-usuario.ts"
+    "producao:criar-usuario": "tsx --env-file=.env.producao scripts/criar-usuario.ts",
+    "cotacoes": "tsx --env-file=.env scripts/atualizar-cotacoes.ts",
+    "producao:cotacoes": "tsx --env-file=.env.producao scripts/atualizar-cotacoes.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
