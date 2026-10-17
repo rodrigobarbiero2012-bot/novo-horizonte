@@ -6,7 +6,7 @@ import { SITUACOES } from "@/components/cronograma/situacoes";
 import { Timeline } from "@/components/cronograma/Timeline";
 import { Pagina } from "@/components/Pagina";
 import { Abas, Cabecalho, Cartao, botaoPrimario } from "@/components/ui";
-import { ATIVIDADES_CRONOGRAMA, ehSlugAtividade, MODELOS, situacao } from "@/lib/cronograma/modelos";
+import { ATIVIDADES_CRONOGRAMA, ehSlugAtividade, MODELOS, PENDENCIAS_MODELO, situacao } from "@/lib/cronograma/modelos";
 import { prisma } from "@/lib/db";
 import { dataBr } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
@@ -62,6 +62,12 @@ async function Conteudo({ params, searchParams }: PageProps<"/cronograma/[ativid
           opcoes={anos.map((a) => ({ valor: String(a), rotulo: String(a), href: `/cronograma/${slug}${a === hoje.ano ? "" : `?ano=${a}`}` }))}
         />
       </Cabecalho>
+
+      {PENDENCIAS_MODELO[chave] && (
+        <div className="mb-4 max-w-3xl rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          ⚠ <strong>Pendência:</strong> {PENDENCIAS_MODELO[chave]}
+        </div>
+      )}
 
       {tarefas.length === 0 ? (
         <Cartao className="max-w-2xl p-6">

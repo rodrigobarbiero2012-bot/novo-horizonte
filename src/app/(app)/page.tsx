@@ -6,6 +6,7 @@ import { GraficoMensal } from "@/components/painel/GraficoMensal";
 import { Indicador, textoComparacao } from "@/components/painel/Indicador";
 import { dividaEm, maioresCustos, mixAtividades, resumoPeriodo, ultimos12Meses, umAnoAntes, variacao } from "@/lib/contabil/painel";
 import { balancoAnual, dreAnual } from "@/lib/contabil/relatorios";
+import { ATIVIDADES_CRONOGRAMA, PENDENCIAS_MODELO } from "@/lib/cronograma/modelos";
 import { anosComMovimento, contasAtivas, partidasDoRazao, resumoCotacoes } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
@@ -90,6 +91,19 @@ async function Conteudo() {
             maracujá vendidos e cabeças de gado. Sem eles o painel não calcula custo por saca, produtividade nem margem por unidade
             frente às cotações.
           </li>
+          {Object.entries(PENDENCIAS_MODELO).map(([chave, texto]) => {
+            const slug = Object.entries(ATIVIDADES_CRONOGRAMA).find(([, a]) => a.chave === chave)?.[0];
+            return (
+              <li key={chave}>
+                <strong>Cronograma — pendência:</strong> {texto}{" "}
+                {slug && (
+                  <Link href={`/cronograma/${slug}`} className="underline">
+                    Ver cronograma
+                  </Link>
+                )}
+              </li>
+            );
+          })}
           {anosSemFechar.length > 0 && (
             <li>
               Balanço não fecha em {anosSemFechar.join(" e ")} — datas de lançamento em ano errado.{" "}

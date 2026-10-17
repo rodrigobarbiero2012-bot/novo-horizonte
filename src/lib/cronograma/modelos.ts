@@ -108,6 +108,12 @@ const PECUARIA: TarefaModelo[] = [
 
 export const MODELOS: Record<ChaveAtividade, TarefaModelo[]> = { CAFE, MARACUJA, MILHO, PECUARIA };
 
+/** Pendências de definição do modelo, mostradas no cronograma e nos pontos de atenção do painel. */
+export const PENDENCIAS_MODELO: Partial<Record<ChaveAtividade, string>> = {
+  MILHO:
+    "Confirmar o tipo de cultivo do milho — safra de verão, safrinha ou só silagem. O cronograma usa o modelo de milho de verão até essa definição.",
+};
+
 export type Situacao = "concluida" | "atrasada" | "andamento" | "prevista";
 
 /** Situação de uma tarefa em relação a hoje (mês/ano de referência). */
