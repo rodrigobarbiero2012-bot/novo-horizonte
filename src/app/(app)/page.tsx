@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Cabecalho, Cartao, botaoPrimario } from "@/components/ui";
+import { Cabecalho, Cartao } from "@/components/ui";
 import { Pagina } from "@/components/Pagina";
 import { CartaoCotacao } from "@/components/painel/CartaoCotacao";
 import { GraficoMensal } from "@/components/painel/GraficoMensal";
@@ -61,11 +61,7 @@ async function Conteudo() {
       <Cabecalho
         titulo={`Olá, ${usuario.nome.split(" ")[0]}`}
         subtitulo={`${ano} acumulado até ${dataBr(fim)} (último lançamento), comparado com o mesmo período de ${ano - 1}.`}
-      >
-        <Link href="/lancamentos/novo" className={botaoPrimario}>
-          Novo lançamento
-        </Link>
-      </Cabecalho>
+      />
 
       {/* 1. Como está o ano */}
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
