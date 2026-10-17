@@ -43,8 +43,9 @@ model Conta {
 
   apelidos ContaApelido[]
   partidas Partida[]
-  titulos  Titulo[]       @relation("contaDoTitulo")
-  baixas   Titulo[]       @relation("contaDaBaixa")
+  titulos  Titulo[]            @relation("contaDoTitulo")
+  baixas   Titulo[]            @relation("contaDaBaixa")
+  extratos ImportacaoExtrato[] @relation("contaDoExtrato")
 }
 
 // Grafias antigas com que a conta aparece na planilha ("cc acm", "CC ACM"…),
@@ -61,7 +62,7 @@ model Lancamento {
   id        String   @id @default(cuid())
   data      DateTime @db.Date
   historico String?
-  origem    String // "PLANILHA" | "MANUAL" | "BOLETO"
+  origem    String // "PLANILHA" | "MANUAL" | "DOCUMENTO" | "TITULO" | "EXTRATO"
 
   // Rastro da linha de origem na planilha Gerencial Financeiro (origem = PLANILHA)
   linhaPlanilhaInicio Int?
@@ -85,17 +86,18 @@ model Lancamento {
 // A data fica na partida porque a planilha tem lançamentos cujas pernas caem
 // em datas (e até anos) diferentes; os relatórios usam a data da partida.
 model Partida {
-  id                   String     @id @default(cuid())
+  id                   String             @id @default(cuid())
   lancamentoId         String
-  lancamento           Lancamento @relation(fields: [lancamentoId], references: [id], onDelete: Cascade)
+  lancamento           Lancamento         @relation(fields: [lancamentoId], references: [id], onDelete: Cascade)
   contaId              String
-  conta                Conta      @relation(fields: [contaId], references: [id])
-  data                 DateTime   @db.Date
+  conta                Conta              @relation(fields: [contaId], references: [id])
+  data                 DateTime           @db.Date
   valorCentavos        Int
   historico            String?
   fiscal               Boolean? // coluna "Fiscal S/N" da planilha
   valorNominalCentavos Int?
   linhaPlanilha        Int?
+  transacaoBancaria    TransacaoBancaria?
 
   @@index([data])
   @@index([contaId])
@@ -146,6 +148,44 @@ model Titulo {
 
   @@index([status, vencimento])
   @@index([grupoParcelasId])
+}
+
+// Conciliação bancária: extratos OFX importados por conta (banco ou CC do
+// sócio) e cada transação, conciliada com uma partida do razão, lançada ou ignorada.
+model ImportacaoExtrato {
+  id                 String    @id @default(cuid())
+  contaId            String
+  conta              Conta     @relation("contaDoExtrato", fields: [contaId], references: [id])
+  arquivo            String
+  banco              String?
+  inicio             DateTime? @db.Date
+  fim                DateTime? @db.Date
+  saldoFinalCentavos Int?
+  dataSaldo          DateTime? @db.Date
+  novas              Int
+  repetidas          Int
+  criadoPorId        String?
+  criadoEm           DateTime  @default(now())
+
+  transacoes TransacaoBancaria[]
+}
+
+model TransacaoBancaria {
+  id            String            @id @default(cuid())
+  importacaoId  String
+  importacao    ImportacaoExtrato @relation(fields: [importacaoId], references: [id], onDelete: Cascade)
+  contaId       String
+  fitid         String
+  data          DateTime          @db.Date
+  valorCentavos Int // positivo = entrou na conta
+  descricao     String
+  status        String            @default("PENDENTE") // "PENDENTE" | "CONCILIADA" | "IGNORADA"
+  partidaId     String?           @unique
+  partida       Partida?          @relation(fields: [partidaId], references: [id], onDelete: SetNull)
+  criadoEm      DateTime          @default(now())
+
+  @@unique([contaId, fitid])
+  @@index([contaId, status, data])
 }
 
 // Produção: talhões (ou pastos) e movimentos físicos — colheita, venda,

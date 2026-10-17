@@ -113,6 +113,8 @@ export async function atualizarLancamento(id: string, _: EstadoFormulario, form:
   const l = v.lancamento;
   await prisma.$transaction(async (tx) => {
     const antes = await tx.lancamento.findUniqueOrThrow({ where: { id }, include: { partidas: true } });
+    // As partidas são recriadas: transações de extrato ligadas a elas voltam a pendentes.
+    await tx.transacaoBancaria.updateMany({ where: { partida: { lancamentoId: id } }, data: { status: "PENDENTE", partidaId: null } });
     await tx.partida.deleteMany({ where: { lancamentoId: id } });
     const depois = await tx.lancamento.update({
       where: { id },
@@ -148,6 +150,8 @@ export async function excluirLancamento(id: string) {
       where: { lancamentoId: id },
       data: { status: "ABERTO", baixadoEm: null, valorBaixaCentavos: null, contaBaixaId: null, lancamentoId: null },
     });
+    // Transações de extrato conciliadas com este lançamento voltam a pendentes.
+    await tx.transacaoBancaria.updateMany({ where: { partida: { lancamentoId: id } }, data: { status: "PENDENTE", partidaId: null } });
     await tx.lancamento.delete({ where: { id } });
     await tx.registroAuditoria.create({
       data: { usuarioId: usuario.id, entidade: "Lancamento", entidadeId: id, acao: "EXCLUIR", antes: fotografia(antes) },
