@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_SESSAO, verificarSessao } from "./lib/sessao";
 
-// Tudo exige login, menos a própria tela de login. A checagem definitiva
+// Tudo exige login, menos a tela de login e a de primeiro acesso. A checagem definitiva
 // (usuário ainda existe no banco) fica em exigirUsuario(); aqui é só o filtro
 // rápido para não renderizar página nenhuma sem cookie válido.
 export async function proxy(request: NextRequest) {
@@ -11,5 +11,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  matcher: ["/((?!login|primeiro-acesso|_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };

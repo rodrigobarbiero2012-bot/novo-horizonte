@@ -45,14 +45,42 @@ export async function entrar(email: string, senha: string): Promise<ResultadoLog
   if (usuario.tentativasFalhas || usuario.bloqueadoAte) {
     await prisma.usuario.update({ where: { id: usuario.id }, data: { tentativasFalhas: 0, bloqueadoAte: null } });
   }
-  (await cookies()).set(COOKIE_SESSAO, await assinarSessao(usuario.id), {
+  await abrirSessao(usuario.id);
+  return "ok";
+}
+
+async function abrirSessao(usuarioId: string) {
+  (await cookies()).set(COOKIE_SESSAO, await assinarSessao(usuarioId), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: DURACAO_SESSAO_SEGUNDOS,
   });
-  return "ok";
+}
+
+export const TAMANHO_MINIMO_SENHA = 10;
+
+/**
+ * Primeiro acesso: o sócio define a própria senha. Só vale para e-mail já
+ * cadastrado (scripts/criar-usuario.ts sem --senha) e ainda sem senha — a
+ * troca é atômica (updateMany com senhaHash = null), então cada convite só
+ * pode ser usado uma vez. Recurso temporário, a remover depois que os dois
+ * sócios tiverem senha.
+ */
+export async function definirPrimeiraSenha(email: string, senha: string): Promise<boolean> {
+  const emailNormal = email.trim().toLowerCase();
+  const { count } = await prisma.usuario.updateMany({
+    where: { email: emailNormal, senhaHash: null },
+    data: { senhaHash: await hashSenha(senha), tentativasFalhas: 0, bloqueadoAte: null },
+  });
+  if (count !== 1) return false;
+  const usuario = await prisma.usuario.findUniqueOrThrow({ where: { email: emailNormal } });
+  await prisma.registroAuditoria.create({
+    data: { usuarioId: usuario.id, entidade: "Usuario", entidadeId: usuario.id, acao: "DEFINIR_SENHA" },
+  });
+  await abrirSessao(usuario.id);
+  return true;
 }
 
 export async function sair() {
