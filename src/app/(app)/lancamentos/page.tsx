@@ -163,9 +163,14 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
         titulo="Lançamentos"
         subtitulo="Clique no título de uma coluna para ordenar; use a linha de filtros logo abaixo. Clique na data para abrir, editar ou excluir."
       >
-        <Link href="/lancamentos/novo" className={botaoPrimario}>
-          Novo lançamento
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/lancamentos/ler" className={botaoPrimario}>
+            Ler boleto ou nota
+          </Link>
+          <Link href="/lancamentos/novo" className={botaoSecundario}>
+            Novo lançamento
+          </Link>
+        </div>
       </Cabecalho>
 
       {/* Os campos de filtro ficam dentro da tabela e se ligam a este form pelo atributo form="filtros". */}

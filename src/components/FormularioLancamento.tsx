@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { lerValorBr } from "@/lib/contabil/lancamento";
 import { botaoPrimario, botaoSecundario, campo } from "./ui";
 import type { EstadoFormulario } from "@/app/(app)/lancamentos/acoes";
@@ -22,6 +22,12 @@ type Props = {
   contas: Conta[];
   acao: (estado: EstadoFormulario, form: FormData) => Promise<EstadoFormulario>;
   inicial?: { data: string; historico: string; linhas: LinhaForm[] };
+  /** Editando um lançamento existente (senão é um lançamento novo, mesmo vindo pré-preenchido). */
+  edicao?: boolean;
+  /** Origem gravada no lançamento novo: "MANUAL" (padrão) ou "DOCUMENTO" (lido de boleto/nota). */
+  origem?: "MANUAL" | "DOCUMENTO";
+  /** Chamado depois de gravar um lançamento novo, com o id criado. */
+  aoGravar?: (id: string) => void;
   /** Mostra data e histórico por linha (lançamentos da planilha que têm pernas em datas diferentes). */
   detalharLinhas?: boolean;
   textoBotao?: string;
@@ -36,7 +42,16 @@ const centavos = (t: string) => {
 };
 const formatar = (c: number) => (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function FormularioLancamento({ contas, acao, inicial, detalharLinhas = false, textoBotao = "Gravar lançamento" }: Props) {
+export function FormularioLancamento({
+  contas,
+  acao,
+  inicial,
+  edicao = false,
+  origem = "MANUAL",
+  aoGravar,
+  detalharLinhas = false,
+  textoBotao = "Gravar lançamento",
+}: Props) {
   const [estado, acaoForm, enviando] = useActionState(acao, undefined);
   const [data, setData] = useState(inicial?.data ?? hoje());
   const [historico, setHistorico] = useState(inicial?.historico ?? "");
@@ -44,11 +59,14 @@ export function FormularioLancamento({ contas, acao, inicial, detalharLinhas = f
   const [ultimoOk, setUltimoOk] = useState<string | undefined>();
 
   // Depois de gravar um lançamento novo, limpa o formulário para o próximo.
-  if (!inicial && estado?.ok && estado.ok !== ultimoOk) {
+  if (!edicao && estado?.ok && estado.ok !== ultimoOk) {
     setUltimoOk(estado.ok);
     setHistorico("");
     setLinhas([linhaVazia(), linhaVazia()]);
   }
+  useEffect(() => {
+    if (!edicao && estado?.ok) aoGravar?.(estado.ok);
+  }, [edicao, estado, aoGravar]);
 
   const totalDebito = linhas.reduce((s, l) => s + centavos(l.debito), 0);
   const totalCredito = linhas.reduce((s, l) => s + centavos(l.credito), 0);
@@ -71,6 +89,7 @@ export function FormularioLancamento({ contas, acao, inicial, detalharLinhas = f
 
   return (
     <form action={acaoForm} className="space-y-5">
+      {!edicao && <input type="hidden" name="origem" value={origem} />}
       <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
         <label className="block">
           <span className="text-sm font-medium text-stone-700">Data</span>
@@ -197,7 +216,7 @@ export function FormularioLancamento({ contas, acao, inicial, detalharLinhas = f
         ) : (
           totalDebito > 0 && <span className="text-sm text-folha-700">Débito = crédito ✓</span>
         )}
-        {inicial && (
+        {edicao && (
           <Link href="/lancamentos" className={botaoSecundario}>
             Voltar aos lançamentos
           </Link>
@@ -213,8 +232,8 @@ export function FormularioLancamento({ contas, acao, inicial, detalharLinhas = f
       )}
       {estado?.ok && (
         <p className="rounded-lg border border-folha-100 bg-folha-50 px-4 py-3 text-sm text-folha-800">
-          {inicial ? "Alterações gravadas." : "Lançamento gravado. "}
-          {!inicial && (
+          {edicao ? "Alterações gravadas." : "Lançamento gravado. "}
+          {!edicao && (
             <Link href={`/lancamentos/${estado.ok}`} className="underline">
               Ver lançamento
             </Link>

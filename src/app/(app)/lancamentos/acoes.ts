@@ -84,12 +84,13 @@ export async function criarLancamento(_: EstadoFormulario, form: FormData): Prom
   const v = await validar(form);
   if (!v.lancamento) return { erros: v.erros };
   const l = v.lancamento;
+  const origem = form.get("origem") === "DOCUMENTO" ? "DOCUMENTO" : "MANUAL";
   const criado = await prisma.$transaction(async (tx) => {
     const novo = await tx.lancamento.create({
       data: {
         data: new Date(l.data),
         historico: l.historico,
-        origem: "MANUAL",
+        origem,
         criadoPorId: usuario.id,
         atualizadoPorId: usuario.id,
         partidas: { create: partidasParaGravar(l) },

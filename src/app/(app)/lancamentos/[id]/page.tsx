@@ -64,6 +64,7 @@ async function Conteudo({ params }: PageProps<"/lancamentos/[id]">) {
           contas={contas}
           acao={atualizarLancamento.bind(null, id)}
           inicial={{ data, historico: lancamento.historico ?? "", linhas }}
+          edicao
           detalharLinhas={detalhar}
           textoBotao="Gravar alterações"
         />
