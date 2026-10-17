@@ -12,12 +12,12 @@ Stack: Next.js 16 + Prisma 7 + Postgres (Neon em produção, `prisma dev` local)
 
 ## Telas
 
-Login · Painel · Novo lançamento · Razão (filtros + saldo corrido por conta) · Lançamento (editar/excluir, com histórico de alterações) · DRE · Balanço · Fluxo de caixa (anual e mês a mês) · Plano de contas.
+Login · Painel · Lançamentos (lista com filtros e saldo corrido por conta, novo, editar e excluir com histórico de alterações; `/razao` redireciona para cá) · DRE · Balanço · Fluxo de caixa (anual e mês a mês) · Plano de contas · Convidar sócio e Primeiro acesso (temporárias).
 
 - **Login:** sessão em cookie assinado (`src/lib/sessao.ts`, `AUTH_SECRET` no `.env`). O `src/proxy.ts` barra quem não tem cookie, e cada página chama `exigirUsuario()`.
-- **Usuários:** `npm run criar-usuario -- --nome "Nome" --email email@dominio`. Gera uma senha e mostra uma única vez.
+- **Usuários:** um sócio logado gera o link de convite em "Convidar sócio" (uso único, 72h). O convidado define a senha em `/primeiro-acesso`.
 - **Auditoria:** toda criação, alteração e exclusão grava `RegistroAuditoria` com o usuário e o estado antes e depois.
-- **Rodar local:** `npm run dev`. O banco local precisa estar no ar (`npx prisma dev start novo-horizonte`).
+- **Rodar local:** `npm run dev`. O banco local precisa estar no ar (`npx prisma dev --name novo-horizonte --detach`).
 
 ## Produção
 

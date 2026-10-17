@@ -18,7 +18,8 @@ function createClient() {
   }
   const adapter = new URL(url).hostname.endsWith("neon.tech")
     ? new PrismaNeon({ connectionString: url })
-    : new PrismaPg({ connectionString: url });
+    : // `prisma dev` aceita uma conexão por vez; consultas em paralelo ficam na fila.
+      new PrismaPg({ connectionString: url, max: 1 });
   return new PrismaClient({ adapter });
 }
 

@@ -8,12 +8,12 @@ import { dataBr, reais } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
 import { Pagina } from "@/components/Pagina";
 
-export const metadata: Metadata = { title: "Razão" };
+export const metadata: Metadata = { title: "Lançamentos" };
 
 const POR_PAGINA = 100;
 const dataValida = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-async function Conteudo({ searchParams }: PageProps<"/razao">) {
+async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
   await exigirUsuario();
   const sp = await searchParams;
   const conta = typeof sp.conta === "string" ? sp.conta : "";
@@ -69,14 +69,14 @@ async function Conteudo({ searchParams }: PageProps<"/razao">) {
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
   const link = (n: number) => {
     const q = new URLSearchParams({ ...(conta && { conta }), ...(busca && { busca }), ...(de && { de }), ...(ate && { ate }), pagina: String(n) });
-    return `/razao?${q}`;
+    return `/lancamentos?${q}`;
   };
   const contaEscolhida = contas.find((c) => c.id === conta);
   const porCategoria = Map.groupBy(contas, (c) => c.categoria);
 
   return (
     <>
-      <Cabecalho titulo="Razão" subtitulo="Todas as linhas lançadas, das mais recentes para as mais antigas.">
+      <Cabecalho titulo="Lançamentos" subtitulo="Todas as linhas lançadas, das mais recentes para as mais antigas. Clique na data para abrir, editar ou excluir.">
         <Link href="/lancamentos/novo" className={botaoPrimario}>
           Novo lançamento
         </Link>
@@ -100,7 +100,7 @@ async function Conteudo({ searchParams }: PageProps<"/razao">) {
         <input type="date" name="ate" defaultValue={ate} className={campo} aria-label="Até" />
         <div className="flex gap-2">
           <button className={botaoPrimario}>Filtrar</button>
-          <Link href="/razao" className={botaoSecundario}>
+          <Link href="/lancamentos" className={botaoSecundario}>
             Limpar
           </Link>
         </div>
@@ -179,7 +179,7 @@ async function Conteudo({ searchParams }: PageProps<"/razao">) {
   );
 }
 
-export default function RazaoPage(props: PageProps<"/razao">) {
+export default function LancamentosPage(props: PageProps<"/lancamentos">) {
   return (
     <Pagina>
       <Conteudo {...props} />

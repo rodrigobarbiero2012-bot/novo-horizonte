@@ -198,8 +198,8 @@ export function FormularioLancamento({ contas, acao, inicial, detalharLinhas = f
           totalDebito > 0 && <span className="text-sm text-folha-700">Débito = crédito ✓</span>
         )}
         {inicial && (
-          <Link href="/razao" className={botaoSecundario}>
-            Voltar ao razão
+          <Link href="/lancamentos" className={botaoSecundario}>
+            Voltar aos lançamentos
           </Link>
         )}
       </div>

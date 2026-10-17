@@ -5,8 +5,7 @@ import { usePathname } from "next/navigation";
 
 const ITENS = [
   { href: "/", rotulo: "Painel" },
-  { href: "/lancamentos/novo", rotulo: "Novo lançamento" },
-  { href: "/razao", rotulo: "Razão" },
+  { href: "/lancamentos", rotulo: "Lançamentos" },
   { href: "/dre", rotulo: "DRE" },
   { href: "/balanco", rotulo: "Balanço" },
   { href: "/fluxo-caixa", rotulo: "Fluxo de caixa" },

@@ -51,7 +51,7 @@ async function Conteudo() {
                     return (
                       <tr key={c.id} className="border-t border-stone-100">
                         <td className="px-4 py-1.5">
-                          <Link href={`/razao?conta=${c.id}`} className="text-stone-800 hover:underline">
+                          <Link href={`/lancamentos?conta=${c.id}`} className="text-stone-800 hover:underline">
                             {c.nome}
                           </Link>
                           {grafias.length > 0 && <p className="text-xs text-stone-400">na planilha: {grafias.join(" · ")}</p>}

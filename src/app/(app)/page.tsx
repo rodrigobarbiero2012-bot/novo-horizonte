@@ -90,7 +90,7 @@ async function Conteudo() {
         <Cartao className="p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-stone-800">Últimos lançamentos</h2>
-            <Link href="/razao" className="text-sm text-folha-700 hover:underline">Ver razão</Link>
+            <Link href="/lancamentos" className="text-sm text-folha-700 hover:underline">Ver todos</Link>
           </div>
           <ul className="divide-y divide-stone-100 text-sm">
             {recentes.map((l) => {

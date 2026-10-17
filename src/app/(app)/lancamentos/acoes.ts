@@ -148,5 +148,5 @@ export async function excluirLancamento(id: string) {
     });
   });
   revalidatePath("/", "layout");
-  redirect("/razao");
+  redirect("/lancamentos");
 }
