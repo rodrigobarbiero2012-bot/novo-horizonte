@@ -118,7 +118,7 @@ model Cotacao {
 // Cada ano nasce de um modelo (src/lib/cronograma/modelos.ts) e é editável.
 model TarefaCronograma {
   id             String    @id @default(cuid())
-  atividade      String // "CAFE" | "MARACUJA" | "PECUARIA"
+  atividade      String // "CAFE" | "MARACUJA" | "MILHO" | "PECUARIA"
   ano            Int
   etapa          String
   titulo         String

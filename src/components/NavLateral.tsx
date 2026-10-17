@@ -16,6 +16,7 @@ const ITENS: Item[] = [
     itens: [
       { href: "/cronograma/cafe", rotulo: "Café" },
       { href: "/cronograma/maracuja", rotulo: "Maracujá" },
+      { href: "/cronograma/milho", rotulo: "Milho" },
       { href: "/cronograma/pecuaria", rotulo: "Pecuária" },
     ],
   },

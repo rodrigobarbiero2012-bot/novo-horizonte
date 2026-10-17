@@ -6,6 +6,7 @@
 export const ATIVIDADES_CRONOGRAMA = {
   cafe: { chave: "CAFE", nome: "Café" },
   maracuja: { chave: "MARACUJA", nome: "Maracujá" },
+  milho: { chave: "MILHO", nome: "Milho" },
   pecuaria: { chave: "PECUARIA", nome: "Pecuária" },
 } as const;
 
@@ -65,6 +66,25 @@ const MARACUJA: TarefaModelo[] = [
   { etapa: "Renovação e plantio", titulo: "Condução: desbrota e poda de formação", mesInicio: 10, mesFim: 12 },
 ];
 
+// Milho de verão (safra), plantado na primavera e colhido no outono; a
+// silagem, se houver, sai antes da colheita de grãos.
+const MILHO: TarefaModelo[] = [
+  { etapa: "Colheita e pós-colheita", titulo: "Corte para silagem (se for o destino)", mesInicio: 1, mesFim: 2 },
+  { etapa: "Colheita e pós-colheita", titulo: "Colheita de grãos", mesInicio: 3, mesFim: 4 },
+  { etapa: "Colheita e pós-colheita", titulo: "Secagem e armazenamento", mesInicio: 3, mesFim: 4 },
+  { etapa: "Colheita e pós-colheita", titulo: "Comercialização ou uso no trato do gado", mesInicio: 4, mesFim: 6 },
+  { etapa: "Planejamento e preparo", titulo: "Análise de solo", mesInicio: 7, mesFim: 8 },
+  { etapa: "Planejamento e preparo", titulo: "Compra de sementes, adubos e defensivos", mesInicio: 8, mesFim: 9 },
+  { etapa: "Planejamento e preparo", titulo: "Calagem e gessagem", mesInicio: 8, mesFim: 9 },
+  { etapa: "Planejamento e preparo", titulo: "Preparo do solo / dessecação para plantio direto", mesInicio: 9, mesFim: 10 },
+  { etapa: "Plantio", titulo: "Tratamento de sementes", mesInicio: 10, mesFim: 10 },
+  { etapa: "Plantio", titulo: "Plantio com adubação de base", mesInicio: 10, mesFim: 11 },
+  { etapa: "Tratos culturais", titulo: "Adubação de cobertura (nitrogênio, entre V4 e V6)", mesInicio: 11, mesFim: 12 },
+  { etapa: "Tratos culturais", titulo: "Controle de plantas daninhas (pós-emergente)", mesInicio: 11, mesFim: 12 },
+  { etapa: "Tratos culturais", titulo: "Monitorar lagarta-do-cartucho e cigarrinha", mesInicio: 11, mesFim: 12 },
+  { etapa: "Tratos culturais", titulo: "Monitorar pragas e doenças foliares (continuação)", mesInicio: 1, mesFim: 2 },
+];
+
 const PECUARIA: TarefaModelo[] = [
   { etapa: "Sanidade", titulo: "Vacinar bezerras contra brucelose (3 a 8 meses de idade)", mesInicio: 1, mesFim: 12 },
   { etapa: "Sanidade", titulo: "Demais vacinas conforme calendário do órgão estadual e do veterinário", mesInicio: 5, mesFim: 5 },
@@ -86,7 +106,7 @@ const PECUARIA: TarefaModelo[] = [
   { etapa: "Rebanho", titulo: "Planejar compra e venda de animais", mesInicio: 4, mesFim: 6 },
 ];
 
-export const MODELOS: Record<ChaveAtividade, TarefaModelo[]> = { CAFE, MARACUJA, PECUARIA };
+export const MODELOS: Record<ChaveAtividade, TarefaModelo[]> = { CAFE, MARACUJA, MILHO, PECUARIA };
 
 export type Situacao = "concluida" | "atrasada" | "andamento" | "prevista";
 
