@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
 import { assinarSessao, COOKIE_SESSAO, DURACAO_SESSAO_SEGUNDOS, verificarSessao } from "./sessao";
@@ -60,22 +61,46 @@ async function abrirSessao(usuarioId: string) {
 }
 
 export const TAMANHO_MINIMO_SENHA = 10;
+const HORAS_VALIDADE_CONVITE = 72;
+
+const sha256 = (texto: string) => createHash("sha256").update(texto).digest("hex");
 
 /**
- * Primeiro acesso: o sócio define a própria senha. Só vale para e-mail já
- * cadastrado (scripts/criar-usuario.ts sem --senha) e ainda sem senha — a
- * troca é atômica (updateMany com senhaHash = null), então cada convite só
- * pode ser usado uma vez. Recurso temporário, a remover depois que os dois
- * sócios tiverem senha.
+ * Convite de primeiro acesso, gerado por um sócio já logado. Devolve o token
+ * (vai no link e não é guardado); o banco fica só com o hash. Recusa e-mail
+ * que já tem senha.
  */
-export async function definirPrimeiraSenha(email: string, senha: string): Promise<boolean> {
+export async function criarConvite(nome: string, email: string, convidadoPor: string): Promise<string | null> {
   const emailNormal = email.trim().toLowerCase();
+  const existente = await prisma.usuario.findUnique({ where: { email: emailNormal } });
+  if (existente?.senhaHash) return null;
+  const token = randomBytes(32).toString("base64url");
+  const convite = { conviteHash: sha256(token), conviteExpiraEm: new Date(Date.now() + HORAS_VALIDADE_CONVITE * 3_600_000) };
+  const usuario = await prisma.usuario.upsert({
+    where: { email: emailNormal },
+    create: { nome: nome.trim(), email: emailNormal, ...convite },
+    update: { nome: nome.trim(), ...convite },
+  });
+  await prisma.registroAuditoria.create({
+    data: { usuarioId: convidadoPor, entidade: "Usuario", entidadeId: usuario.id, acao: "CONVIDAR", depois: { nome: usuario.nome, email: emailNormal } },
+  });
+  return token;
+}
+
+/**
+ * Primeiro acesso pelo link de convite: grava a senha e abre a sessão. A troca
+ * é atômica (convite válido, não expirado e usuário ainda sem senha), então o
+ * link só funciona uma vez.
+ */
+export async function definirPrimeiraSenha(token: string, senha: string): Promise<boolean> {
+  const conviteHash = sha256(token);
+  const usuario = await prisma.usuario.findUnique({ where: { conviteHash } });
+  if (!usuario) return false;
   const { count } = await prisma.usuario.updateMany({
-    where: { email: emailNormal, senhaHash: null },
-    data: { senhaHash: await hashSenha(senha), tentativasFalhas: 0, bloqueadoAte: null },
+    where: { id: usuario.id, conviteHash, conviteExpiraEm: { gt: new Date() }, senhaHash: null },
+    data: { senhaHash: await hashSenha(senha), conviteHash: null, conviteExpiraEm: null, tentativasFalhas: 0, bloqueadoAte: null },
   });
   if (count !== 1) return false;
-  const usuario = await prisma.usuario.findUniqueOrThrow({ where: { email: emailNormal } });
   await prisma.registroAuditoria.create({
     data: { usuarioId: usuario.id, entidade: "Usuario", entidadeId: usuario.id, acao: "DEFINIR_SENHA" },
   });

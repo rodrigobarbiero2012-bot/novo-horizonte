@@ -2,7 +2,8 @@
 //
 //   npm run criar-usuario -- --nome "Rodrigo" --email rodrigo@exemplo.com
 //
-// Sem --senha, o usuário fica sem senha e a define ele mesmo em /primeiro-acesso.
+// Sem --senha, o usuário fica sem senha; o link de convite é gerado no site
+// (Convidar sócio) e ele define a senha em /primeiro-acesso.
 // Rodar de novo para um e-mail existente zera a senha (libera um novo primeiro
 // acesso). Com --senha, já grava a senha informada (usado para o usuário de
 // teste local).
@@ -26,7 +27,7 @@ async function main() {
     update: { nome: values.nome, senhaHash, tentativasFalhas: 0, bloqueadoAte: null },
   });
   console.log(`Usuário pronto: ${usuario.nome} <${usuario.email}>`);
-  if (!senhaHash) console.log("Sem senha: ele define a própria senha em /primeiro-acesso.");
+  if (!senhaHash) console.log("Sem senha: gere o link de convite no site, em Convidar sócio.");
 }
 
 main().finally(() => prisma.$disconnect());

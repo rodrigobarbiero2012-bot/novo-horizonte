@@ -11,6 +11,7 @@ const ITENS = [
   { href: "/balanco", rotulo: "Balanço" },
   { href: "/fluxo-caixa", rotulo: "Fluxo de caixa" },
   { href: "/contas", rotulo: "Plano de contas" },
+  { href: "/convites", rotulo: "Convidar sócio" }, // temporário
 ];
 
 /** Menu sem item destacado: é o que aparece até a URL atual ser conhecida. */

@@ -18,6 +18,11 @@ model Usuario {
   tentativasFalhas Int       @default(0)
   bloqueadoAte     DateTime?
 
+  // Convite de primeiro acesso: só o sha256 do token fica no banco; o token
+  // vai no link gerado em /convites. Uso único, com validade.
+  conviteHash     String?   @unique
+  conviteExpiraEm DateTime?
+
   lancamentosCriados    Lancamento[]         @relation("criadoPor")
   lancamentosAlterados  Lancamento[]         @relation("atualizadoPor")
   registrosDeAuditoria  RegistroAuditoria[]

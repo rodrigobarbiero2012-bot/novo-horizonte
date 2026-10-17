@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 import { acaoEntrar } from "./actions";
 
@@ -43,11 +42,6 @@ export default function LoginPage() {
           >
             {enviando ? "Entrando…" : "Entrar"}
           </button>
-          <p className="text-center text-sm">
-            <Link href="/primeiro-acesso" className="text-folha-700 hover:underline">
-              Primeiro acesso? Defina sua senha
-            </Link>
-          </p>
         </form>
       </div>
     </main>
