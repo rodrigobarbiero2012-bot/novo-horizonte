@@ -13,6 +13,15 @@ const ITENS: Item[] = [
   { href: "/balanco", rotulo: "Balanço" },
   { href: "/fluxo-caixa", rotulo: "Fluxo de caixa" },
   {
+    grupo: "Produção",
+    itens: [
+      { href: "/producao/cafe", rotulo: "Café" },
+      { href: "/producao/maracuja", rotulo: "Maracujá" },
+      { href: "/producao/milho", rotulo: "Milho" },
+      { href: "/producao/pecuaria", rotulo: "Pecuária" },
+    ],
+  },
+  {
     grupo: "Cronograma",
     itens: [
       { href: "/cronograma/cafe", rotulo: "Café" },

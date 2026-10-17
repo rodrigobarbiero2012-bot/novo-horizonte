@@ -148,6 +148,42 @@ model Titulo {
   @@index([grupoParcelasId])
 }
 
+// Produção: talhões (ou pastos) e movimentos físicos — colheita, venda,
+// consumo, perda, ajuste; no gado, compra/nascimento/venda/morte em cabeças.
+// A unidade de cada atividade é fixa (src/lib/producao/atividades.ts).
+model Talhao {
+  id         String   @id @default(cuid())
+  atividade  String // "CAFE" | "MARACUJA" | "MILHO" | "PECUARIA"
+  nome       String
+  areaHa     Float
+  variedade  String?
+  anoPlantio Int?
+  plantas    Int?
+  ativo      Boolean  @default(true)
+  observacao String?
+  criadoEm   DateTime @default(now())
+
+  movimentos MovimentoProducao[]
+
+  @@index([atividade])
+}
+
+model MovimentoProducao {
+  id            String   @id @default(cuid())
+  atividade     String
+  data          DateTime @db.Date
+  tipo          String // ver TIPOS_MOVIMENTO
+  quantidade    Float // sempre positiva; o tipo define se entra ou sai (AJUSTE pode ser negativo)
+  talhaoId      String?
+  talhao        Talhao?  @relation(fields: [talhaoId], references: [id], onDelete: SetNull)
+  valorCentavos Int? // valor da venda/compra, quando houver
+  observacao    String?
+  criadoPorId   String?
+  criadoEm      DateTime @default(now())
+
+  @@index([atividade, data])
+}
+
 // Cronograma de produção: tarefas por atividade e ano, com checklist.
 // Cada ano nasce de um modelo (src/lib/cronograma/modelos.ts) e é editável.
 model TarefaCronograma {

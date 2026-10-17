@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
       { source: "/razao", destination: "/lancamentos", permanent: true },
       // "Cronograma" no menu é só o título do grupo; o endereço sem atividade abre o café.
       { source: "/cronograma", destination: "/cronograma/cafe", permanent: false },
+      { source: "/producao", destination: "/producao/cafe", permanent: false },
     ];
   },
   partialPrefetching: true,

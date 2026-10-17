@@ -7,6 +7,7 @@ import { Indicador, textoComparacao } from "@/components/painel/Indicador";
 import { dividaEm, maioresCustos, mixAtividades, resumoPeriodo, ultimos12Meses, umAnoAntes, variacao } from "@/lib/contabil/painel";
 import { balancoAnual, dreAnual } from "@/lib/contabil/relatorios";
 import { ATIVIDADES_CRONOGRAMA, PENDENCIAS_MODELO } from "@/lib/cronograma/modelos";
+import { ATIVIDADES_PRODUCAO } from "@/lib/producao/atividades";
 import { anosComMovimento, contasAtivas, partidasDoRazao, resumoCotacoes } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
@@ -14,7 +15,7 @@ import { exigirUsuario } from "@/lib/usuario";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     resumoCotacoes(),
@@ -29,7 +30,11 @@ async function Conteudo() {
       where: { status: "ABERTO", tipo: "PAGAR", vencimento: { lte: new Date(Date.parse(new Date().toLocaleDateString("sv-SE")) + 7 * 86_400_000) } },
       select: { valorCentavos: true, vencimento: true },
     }),
+    prisma.talhao.groupBy({ by: ["atividade"] }),
+    prisma.movimentoProducao.groupBy({ by: ["atividade"] }),
   ]);
+  const comDados = new Set([...comTalhao, ...comMovimento].map((g) => g.atividade));
+  const producaoPendente = Object.entries(ATIVIDADES_PRODUCAO).filter(([, def]) => !comDados.has(def.chave));
 
   // Período: do início do ano até o último lançamento, contra o mesmo período do ano anterior.
   const hoje = new Date().toLocaleDateString("sv-SE");
@@ -113,11 +118,20 @@ async function Conteudo() {
               </Link>
             </li>
           )}
-          <li>
-            <strong>Dados de produção pendentes — confirmar:</strong> sacas de café colhidas por ano, área plantada (ha), caixas/kg de
-            maracujá vendidos e cabeças de gado. Sem eles o painel não calcula custo por saca, produtividade nem margem por unidade
-            frente às cotações.
-          </li>
+          {producaoPendente.length > 0 && (
+            <li>
+              <strong>Dados de produção pendentes — confirmar:</strong> área e produção de{" "}
+              {producaoPendente.map(([slug, def], i) => (
+                <span key={slug}>
+                  {i > 0 && (i === producaoPendente.length - 1 ? " e " : ", ")}
+                  <Link href={`/producao/${slug}`} className="underline">
+                    {def.nome.toLowerCase()}
+                  </Link>
+                </span>
+              ))}
+              . Sem eles não há custo por saca, produtividade nem margem frente às cotações.
+            </li>
+          )}
           {Object.entries(PENDENCIAS_MODELO).map(([chave, texto]) => {
             const slug = Object.entries(ATIVIDADES_CRONOGRAMA).find(([, a]) => a.chave === chave)?.[0];
             return (
