@@ -19,6 +19,15 @@ Login · Painel · Novo lançamento · Razão (filtros + saldo corrido por conta
 - **Auditoria:** toda criação, alteração e exclusão grava `RegistroAuditoria` com o usuário e o estado antes e depois.
 - **Rodar local:** `npm run dev`. O banco local precisa estar no ar (`npx prisma dev start novo-horizonte`).
 
+## Produção
+
+- **Site:** Vercel, com deploy automático a cada push no `main`. As variáveis `DATABASE_URL` e `AUTH_SECRET` ficam nas Environment Variables do projeto.
+- **Banco:** Neon, em São Paulo (sa-east-1). Os valores locais ficam em `.env.producao`, que está fora do git.
+- **Comandos de produção** (todos pela porta 443):
+  - `npm run producao:migrar`: aplica migrações novas. Rodar **antes** do push que depende delas.
+  - `npm run producao:importar`, `npm run producao:conferir`
+  - `npm run producao:criar-usuario -- --nome "…" --email …`
+
 ## Importação da planilha histórica (2014–2026)
 
 Os dados reais ficam em `data/import/`, que é ignorado pelo git por serem confidenciais.
