@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { Cabecalho, Cartao, Valor, botaoPrimario, botaoSecundario, campo } from "@/components/ui";
+import { Cabecalho, Cartao, Valor, botaoPrimario, botaoSecundario } from "@/components/ui";
 import { prisma } from "@/lib/db";
 import { contasAtivas } from "@/lib/consultas";
+import { lerValorBr } from "@/lib/contabil/lancamento";
+import { ehCategoria } from "@/lib/contabil/tipos";
 import { dataBr, reais } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
 import { Pagina } from "@/components/Pagina";
@@ -12,49 +14,107 @@ export const metadata: Metadata = { title: "Lançamentos" };
 
 const POR_PAGINA = 100;
 const dataValida = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const texto = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+// Colunas ordenáveis e a direção usada no primeiro clique.
+const ORDENS = {
+  data: "desc",
+  conta: "asc",
+  historico: "asc",
+  debito: "desc", // maiores débitos primeiro
+  credito: "desc", // maiores créditos primeiro
+} as const;
+type Ordem = keyof typeof ORDENS;
+type Direcao = "asc" | "desc";
+
+function ordenacao(ordem: Ordem, dir: Direcao): Prisma.PartidaOrderByWithRelationInput[] {
+  const desempate: Prisma.PartidaOrderByWithRelationInput[] = [{ data: "desc" }, { linhaPlanilha: "desc" }, { id: "desc" }];
+  switch (ordem) {
+    case "data":
+      return [{ data: dir }, { linhaPlanilha: dir }, { id: dir }];
+    case "conta":
+      return [{ conta: { nome: dir } }, ...desempate];
+    case "historico":
+      return [{ historico: { sort: dir, nulls: "last" } }, ...desempate];
+    case "debito":
+      return [{ valorCentavos: dir }, ...desempate];
+    case "credito": // créditos são negativos: "maiores primeiro" = mais negativos primeiro
+      return [{ valorCentavos: dir === "desc" ? "asc" : "desc" }, ...desempate];
+  }
+}
+
+const campoFiltro =
+  "w-full rounded border border-stone-300 bg-white px-2 py-1 text-xs font-normal text-stone-700 outline-none focus:border-folha-600";
 
 async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
   await exigirUsuario();
   const sp = await searchParams;
-  const conta = typeof sp.conta === "string" ? sp.conta : "";
-  const busca = typeof sp.busca === "string" ? sp.busca.trim() : "";
+
+  // Filtros
+  const conta = texto(sp.conta); // id da conta ou "cat:<Categoria>"
+  const categoria = conta.startsWith("cat:") && ehCategoria(conta.slice(4)) ? conta.slice(4) : "";
+  const contaId = conta && !conta.startsWith("cat:") ? conta : "";
+  const busca = texto(sp.busca);
   const de = dataValida(sp.de) ? sp.de : "";
   const ate = dataValida(sp.ate) ? sp.ate : "";
+  const tipo = sp.tipo === "D" || sp.tipo === "C" ? sp.tipo : "";
+  const minTxt = texto(sp.min);
+  const maxTxt = texto(sp.max);
+  const min = lerValorBr(minTxt);
+  const max = lerValorBr(maxTxt);
+  const valorMin = min !== null && !Number.isNaN(min) ? Math.abs(min) : undefined;
+  const valorMax = max !== null && !Number.isNaN(max) ? Math.abs(max) : undefined;
+
+  // Ordenação
+  const ordem: Ordem = typeof sp.ordem === "string" && sp.ordem in ORDENS ? (sp.ordem as Ordem) : "data";
+  const dir: Direcao = sp.dir === "asc" || sp.dir === "desc" ? sp.dir : ORDENS[ordem];
   const pagina = Math.max(1, Number(sp.pagina) || 1);
 
-  const filtro: Prisma.PartidaWhereInput = {
-    ...(conta && { contaId: conta }),
-    ...((de || ate) && { data: { ...(de && { gte: new Date(de) }), ...(ate && { lte: new Date(ate) }) } }),
-    ...(busca && {
-      OR: [
-        { historico: { contains: busca, mode: "insensitive" } },
-        { lancamento: { historico: { contains: busca, mode: "insensitive" } } },
-      ],
-    }),
+  // Faixa de valor sobre o valor absoluto; débitos são positivos e créditos negativos.
+  const debitos: Prisma.PartidaWhereInput = { valorCentavos: { gt: 0, gte: valorMin, lte: valorMax } };
+  const creditos: Prisma.PartidaWhereInput = {
+    valorCentavos: { lt: 0, lte: valorMin !== undefined ? -valorMin : undefined, gte: valorMax !== undefined ? -valorMax : undefined },
   };
-  const ordem: Prisma.PartidaOrderByWithRelationInput[] = [{ data: "desc" }, { linhaPlanilha: "desc" }, { id: "desc" }];
+  const filtroValor = tipo === "D" ? debitos : tipo === "C" ? creditos : valorMin !== undefined || valorMax !== undefined ? { OR: [debitos, creditos] } : {};
+
+  const filtro: Prisma.PartidaWhereInput = {
+    AND: [
+      contaId ? { contaId } : {},
+      categoria ? { conta: { categoria } } : {},
+      de || ate ? { data: { ...(de && { gte: new Date(de) }), ...(ate && { lte: new Date(ate) }) } } : {},
+      busca
+        ? {
+            OR: [
+              { historico: { contains: busca, mode: "insensitive" } },
+              { lancamento: { historico: { contains: busca, mode: "insensitive" } } },
+            ],
+          }
+        : {},
+      filtroValor,
+    ],
+  };
+  const orderBy = ordenacao(ordem, dir);
   const pular = (pagina - 1) * POR_PAGINA;
+  const temFiltro = Boolean(conta || busca || de || ate || tipo || minTxt || maxTxt);
 
-  // Saldo corrido só faz sentido com uma conta escolhida e sem busca por texto.
-  const comSaldo = Boolean(conta) && !busca;
+  // Saldo corrido: uma conta só, ordem por data decrescente e sem filtros que tirem linhas do meio.
+  const comSaldo = Boolean(contaId) && !busca && !tipo && !minTxt && !maxTxt && ordem === "data" && dir === "desc";
 
-  const [contas, total, somaPeriodo, partidas, saldoAte, somaPaginasAnteriores] = await Promise.all([
+  const [contas, total, somaFiltro, partidas, saldoAte, somaPaginasAnteriores] = await Promise.all([
     contasAtivas(),
     prisma.partida.count({ where: filtro }),
     prisma.partida.aggregate({ where: filtro, _sum: { valorCentavos: true } }),
     prisma.partida.findMany({
       where: filtro,
-      orderBy: ordem,
+      orderBy,
       skip: pular,
       take: POR_PAGINA,
       include: { conta: { select: { nome: true } }, lancamento: { select: { id: true, historico: true } } },
     }),
     comSaldo
-      ? prisma.partida.aggregate({ where: { contaId: conta, ...(ate && { data: { lte: new Date(ate) } }) }, _sum: { valorCentavos: true } })
+      ? prisma.partida.aggregate({ where: { contaId, ...(ate && { data: { lte: new Date(ate) } }) }, _sum: { valorCentavos: true } })
       : null,
-    comSaldo && pular > 0
-      ? prisma.partida.aggregate({ where: filtro, orderBy: ordem, take: pular, _sum: { valorCentavos: true } })
-      : null,
+    comSaldo && pular > 0 ? prisma.partida.aggregate({ where: filtro, orderBy, take: pular, _sum: { valorCentavos: true } }) : null,
   ]);
 
   // Lista em ordem decrescente: o saldo depois de cada linha é o saldo final
@@ -66,80 +126,141 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
     linhas.push({ ...p, saldo: anterior ? anterior.saldo - anterior.valorCentavos : saldoNoTopo });
   }
 
-  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
-  const link = (n: number) => {
-    const q = new URLSearchParams({ ...(conta && { conta }), ...(busca && { busca }), ...(de && { de }), ...(ate && { ate }), pagina: String(n) });
-    return `/lancamentos?${q}`;
+  // Links preservando filtros e ordem atuais.
+  const atuais: Record<string, string> = Object.fromEntries(
+    Object.entries({ conta, busca, de, ate, tipo, min: minTxt, max: maxTxt, ordem: ordem === "data" ? "" : ordem, dir: dir === ORDENS[ordem] ? "" : dir }).filter(
+      ([, v]) => v,
+    ),
+  );
+  const url = (mudancas: Record<string, string>) => {
+    const q = new URLSearchParams(Object.entries({ ...atuais, ...mudancas }).filter(([, v]) => v));
+    return `/lancamentos${q.size ? `?${q}` : ""}`;
   };
-  const contaEscolhida = contas.find((c) => c.id === conta);
+  const linkOrdem = (col: Ordem) => {
+    const novaDir = ordem === col ? (dir === "asc" ? "desc" : "asc") : ORDENS[col];
+    return url({ ordem: col === "data" ? "" : col, dir: novaDir === ORDENS[col] ? "" : novaDir, pagina: "" });
+  };
+  const seta = (col: Ordem) => (ordem === col ? (dir === "asc" ? " ▲" : " ▼") : "");
+
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
   const porCategoria = Map.groupBy(contas, (c) => c.categoria);
+  const nomeFiltroConta = categoria ? `categoria ${categoria}` : contas.find((c) => c.id === contaId)?.nome;
+  const th = "px-3 pt-2.5 pb-1 font-medium";
+  const tituloOrdenavel = (col: Ordem, rotulo: string, alinhamento: "left" | "right") => (
+    <Link
+      href={linkOrdem(col)}
+      className={`inline-flex items-center gap-0.5 hover:text-folha-700 ${ordem === col ? "text-folha-700" : ""} ${alinhamento === "right" ? "justify-end" : ""}`}
+      title="Clique para ordenar"
+    >
+      {rotulo}
+      <span className="text-[10px]">{seta(col) || " ↕"}</span>
+    </Link>
+  );
 
   return (
     <>
-      <Cabecalho titulo="Lançamentos" subtitulo="Todas as linhas lançadas, das mais recentes para as mais antigas. Clique na data para abrir, editar ou excluir.">
+      <Cabecalho
+        titulo="Lançamentos"
+        subtitulo="Clique no título de uma coluna para ordenar; use a linha de filtros logo abaixo. Clique na data para abrir, editar ou excluir."
+      >
         <Link href="/lancamentos/novo" className={botaoPrimario}>
           Novo lançamento
         </Link>
       </Cabecalho>
 
-      <form className="mb-4 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_9.5rem_9.5rem_auto]">
-        <select name="conta" defaultValue={conta} className={campo} aria-label="Conta">
-          <option value="">Todas as contas</option>
-          {[...porCategoria].map(([cat, cs]) => (
-            <optgroup key={cat} label={cat}>
-              {cs.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        <input name="busca" defaultValue={busca} placeholder="Buscar no histórico" className={campo} aria-label="Buscar no histórico" />
-        <input type="date" name="de" defaultValue={de} className={campo} aria-label="De" />
-        <input type="date" name="ate" defaultValue={ate} className={campo} aria-label="Até" />
-        <div className="flex gap-2">
-          <button className={botaoPrimario}>Filtrar</button>
-          <Link href="/lancamentos" className={botaoSecundario}>
-            Limpar
-          </Link>
-        </div>
+      {/* Os campos de filtro ficam dentro da tabela e se ligam a este form pelo atributo form="filtros". */}
+      <form id="filtros" action="/lancamentos">
+        {/* Mantém a ordenação atual ao filtrar. */}
+        {atuais.ordem && <input type="hidden" name="ordem" value={atuais.ordem} />}
+        {atuais.dir && <input type="hidden" name="dir" value={atuais.dir} />}
       </form>
 
-      <p className="mb-2 text-sm text-stone-500">
-        {total.toLocaleString("pt-BR")} linhas
-        {contaEscolhida && <> em <strong className="text-stone-700">{contaEscolhida.nome}</strong></>}
-        {(de || ate || busca || conta) && <> · movimento líquido no filtro: R$ {reais(somaPeriodo._sum.valorCentavos ?? 0)}</>}
-      </p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-stone-500">
+          {total.toLocaleString("pt-BR")} linhas
+          {nomeFiltroConta && <> em <strong className="text-stone-700">{nomeFiltroConta}</strong></>}
+          {temFiltro && <> · movimento líquido no filtro: R$ {reais(somaFiltro._sum.valorCentavos ?? 0)}</>}
+        </p>
+        <div className="flex gap-2">
+          <button form="filtros" className={`${botaoPrimario} py-1.5`}>
+            Filtrar
+          </button>
+          {temFiltro && (
+            <Link href={url({ conta: "", busca: "", de: "", ate: "", tipo: "", min: "", max: "", pagina: "" })} className={`${botaoSecundario} py-1.5`}>
+              Limpar filtros
+            </Link>
+          )}
+        </div>
+      </div>
 
       <Cartao className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-stone-200 text-stone-500">
             <tr>
-              <th className="px-4 py-2.5 text-left font-medium">Data</th>
-              {!conta && <th className="px-3 py-2.5 text-left font-medium">Conta</th>}
-              <th className="px-3 py-2.5 text-left font-medium">Histórico</th>
-              <th className="px-3 py-2.5 text-right font-medium">Débito</th>
-              <th className="px-3 py-2.5 text-right font-medium">Crédito</th>
-              {comSaldo && <th className="px-4 py-2.5 text-right font-medium">Saldo</th>}
+              <th className={`${th} pl-4 text-left`}>{tituloOrdenavel("data", "Data", "left")}</th>
+              <th className={`${th} text-left`}>{tituloOrdenavel("conta", "Conta", "left")}</th>
+              <th className={`${th} text-left`}>{tituloOrdenavel("historico", "Histórico", "left")}</th>
+              <th className={`${th} text-right`}>{tituloOrdenavel("debito", "Débito", "right")}</th>
+              <th className={`${th} text-right`}>{tituloOrdenavel("credito", "Crédito", "right")}</th>
+              {comSaldo && <th className={`${th} pr-4 text-right`}>Saldo</th>}
+            </tr>
+            <tr className="align-top">
+              <th className="px-3 pb-2.5 pl-4">
+                <div className="flex w-32 flex-col gap-1">
+                  <input form="filtros" type="date" name="de" defaultValue={de} className={campoFiltro} aria-label="Data de" title="De" />
+                  <input form="filtros" type="date" name="ate" defaultValue={ate} className={campoFiltro} aria-label="Data até" title="Até" />
+                </div>
+              </th>
+              <th className="px-3 pb-2.5">
+                <select form="filtros" name="conta" defaultValue={conta} className={`${campoFiltro} min-w-44`} aria-label="Filtrar conta">
+                  <option value="">Todas</option>
+                  {[...porCategoria].map(([cat, cs]) => (
+                    <optgroup key={cat} label={cat}>
+                      <option value={`cat:${cat}`}>▸ Toda a categoria {cat}</option>
+                      {cs.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </th>
+              <th className="px-3 pb-2.5">
+                <input form="filtros" name="busca" defaultValue={busca} placeholder="Contém…" className={`${campoFiltro} min-w-40`} aria-label="Filtrar histórico" />
+              </th>
+              <th colSpan={2} className="px-3 pb-2.5">
+                <div className="ml-auto flex w-56 flex-col gap-1">
+                  <select form="filtros" name="tipo" defaultValue={tipo} className={campoFiltro} aria-label="Débito ou crédito">
+                    <option value="">Débitos e créditos</option>
+                    <option value="D">Só débitos</option>
+                    <option value="C">Só créditos</option>
+                  </select>
+                  <div className="flex gap-1">
+                    <input form="filtros" name="min" defaultValue={minTxt} inputMode="decimal" placeholder="Valor de" className={`${campoFiltro} text-right`} aria-label="Valor mínimo" />
+                    <input form="filtros" name="max" defaultValue={maxTxt} inputMode="decimal" placeholder="até" className={`${campoFiltro} text-right`} aria-label="Valor máximo" />
+                  </div>
+                </div>
+              </th>
+              {comSaldo && <th />}
             </tr>
           </thead>
           <tbody>
             {linhas.map((p) => (
               <tr key={p.id} className="border-t border-stone-100 hover:bg-folha-50/60">
-                <td className="whitespace-nowrap px-4 py-1.5 tabular-nums">
+                <td className="whitespace-nowrap px-3 py-1.5 pl-4 tabular-nums">
                   <Link href={`/lancamentos/${p.lancamento.id}`} className="hover:underline">
                     {dataBr(p.data)}
                   </Link>
                 </td>
-                {!conta && <td className="px-3 py-1.5 text-stone-700">{p.conta.nome}</td>}
+                <td className="px-3 py-1.5 text-stone-700">{p.conta.nome}</td>
                 <td className="max-w-md truncate px-3 py-1.5 text-stone-600" title={p.historico ?? p.lancamento.historico ?? ""}>
                   {p.historico ?? p.lancamento.historico}
                 </td>
                 <td className="num px-3 py-1.5">{p.valorCentavos > 0 ? reais(p.valorCentavos) : ""}</td>
                 <td className="num px-3 py-1.5">{p.valorCentavos < 0 ? reais(-p.valorCentavos) : ""}</td>
                 {comSaldo && (
-                  <td className="num px-4 py-1.5 font-medium">
+                  <td className="num px-3 py-1.5 pr-4 font-medium">
                     <Valor centavos={p.saldo} />
                   </td>
                 )}
@@ -163,13 +284,13 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
           </span>
           <div className="flex gap-2">
             {pagina > 1 && (
-              <Link href={link(pagina - 1)} className={botaoSecundario}>
-                ← Mais recentes
+              <Link href={url({ pagina: String(pagina - 1) })} className={botaoSecundario}>
+                ← Anterior
               </Link>
             )}
             {pagina < paginas && (
-              <Link href={link(pagina + 1)} className={botaoSecundario}>
-                Mais antigas →
+              <Link href={url({ pagina: String(pagina + 1) })} className={botaoSecundario}>
+                Próxima →
               </Link>
             )}
           </div>

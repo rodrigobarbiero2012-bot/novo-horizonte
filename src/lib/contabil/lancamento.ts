@@ -15,8 +15,14 @@ export type LancamentoDigitado = { data: string; historico: string; partidas: Pa
 export function lerValorBr(texto: string): number | null {
   const t = texto.trim().replace(/\s|R\$/g, "");
   if (!t) return null;
-  // Com vírgula, ponto é separador de milhar; sem vírgula, ponto é decimal.
-  const normal = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+  // Com vírgula, ponto é separador de milhar. Sem vírgula, pontos seguidos de
+  // grupos de 3 dígitos também são milhar ("10.000", "1.234.567"); caso
+  // contrário o ponto é decimal ("1234.56").
+  const normal = t.includes(",")
+    ? t.replace(/\./g, "").replace(",", ".")
+    : /^-?\d{1,3}(\.\d{3})+$/.test(t)
+      ? t.replace(/\./g, "")
+      : t;
   if (!/^-?\d+(\.\d{1,2})?$/.test(normal)) return NaN;
   return Math.round(Number(normal) * 100);
 }
