@@ -97,10 +97,14 @@ async function Conteudo() {
               const valor = l.partidas.reduce((s, p) => s + Math.max(p.valorCentavos, 0), 0);
               return (
                 <li key={l.id}>
-                  <Link href={`/lancamentos/${l.id}`} className="flex items-baseline justify-between gap-3 py-2 hover:bg-folha-50/60">
-                    <span className="min-w-0">
-                      <span className="tabular-nums text-stone-500">{dataBr(l.data)}</span>{" "}
-                      <span className="truncate text-stone-700">{l.historico}</span>
+                  <Link
+                    href={`/lancamentos/${l.id}`}
+                    title={l.historico ?? undefined}
+                    className="flex items-start justify-between gap-3 py-2 hover:bg-folha-50/60"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block tabular-nums text-stone-500">{dataBr(l.data)}</span>
+                      <span className="block truncate text-stone-700">{l.historico}</span>
                     </span>
                     <span className="num shrink-0 font-medium">{reais(valor)}</span>
                   </Link>
