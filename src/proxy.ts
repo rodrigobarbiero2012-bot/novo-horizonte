@@ -4,7 +4,8 @@ import { COOKIE_SESSAO, verificarSessao } from "./lib/sessao";
 // Tudo exige login, menos a tela de login, a de primeiro acesso, o cron e o webhook do WhatsApp
 // (que se autenticam na própria rota: CRON_SECRET e assinatura da Meta). A checagem definitiva
 // (usuário ainda existe no banco) fica em exigirUsuario(); aqui é só o filtro
-// rápido para não renderizar página nenhuma sem cookie válido.
+// rápido para não renderizar página nenhuma sem cookie válido. O manifesto e os
+// ícones do aplicativo ficam abertos: o celular os busca antes do login.
 export async function proxy(request: NextRequest) {
   const logado = await verificarSessao(request.cookies.get(COOKIE_SESSAO)?.value);
   if (!logado) return NextResponse.redirect(new URL("/login", request.url));
@@ -12,5 +13,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|primeiro-acesso|api/cron|api/whatsapp|_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  matcher: ["/((?!login|primeiro-acesso|api/cron|api/whatsapp|_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|icons/).*)"],
 };

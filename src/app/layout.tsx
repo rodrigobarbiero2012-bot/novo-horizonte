@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -16,7 +16,12 @@ export const metadata: Metadata = {
   title: { default: "Novo Horizonte", template: "%s · Novo Horizonte" },
   description: "Gestão financeira, contábil e de produção do Sítio Novo Horizonte",
   robots: { index: false, follow: false },
+  applicationName: "Novo Horizonte",
+  appleWebApp: { capable: true, title: "Novo Horizonte", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
+
+export const viewport: Viewport = { themeColor: "#1c4332" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

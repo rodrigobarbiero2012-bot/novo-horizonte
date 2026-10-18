@@ -68,7 +68,7 @@ export const campo =
 export function BotaoExportar({ href }: { href: string }) {
   return (
     <a href={href} download className={botaoSecundario} title="Baixar em Excel (.xlsx)">
-      ⬇ Excel
+      ⬇ Exportar planilha
     </a>
   );
 }

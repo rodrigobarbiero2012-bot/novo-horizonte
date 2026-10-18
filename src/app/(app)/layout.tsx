@@ -9,14 +9,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen md:flex">
       <aside className="bg-folha-900 px-3 py-4 md:sticky md:top-0 md:flex md:h-screen md:w-56 md:shrink-0 md:flex-col">
-        <div className="mb-4 px-3">
-          <p className="text-lg font-semibold tracking-tight text-white">Novo Horizonte</p>
-          <p className="text-xs text-folha-100/70">Gestão do sítio</p>
+        <div className="mb-3 flex items-start justify-between px-3 md:mb-4">
+          <div>
+            <p className="text-lg font-semibold tracking-tight text-white">Novo Horizonte</p>
+            <p className="text-xs text-folha-100/70">Gestão do sítio</p>
+          </div>
+          {/* No celular o "Sair" fica ao lado do título, para o menu ocupar uma linha só. */}
+          <form action={acaoSair} className="md:hidden">
+            <button className="pt-1 text-sm text-folha-100/70 hover:text-white">Sair</button>
+          </form>
         </div>
         <Suspense fallback={<ListaNav />}>
           <NavLateral />
         </Suspense>
-        <form action={acaoSair} className="mt-4 border-t border-white/10 px-3 pt-4 md:mt-auto">
+        <form action={acaoSair} className="mt-auto hidden border-t border-white/10 px-3 pt-4 md:block">
           <button className="text-sm text-folha-100/70 hover:text-white">Sair</button>
         </form>
       </aside>
