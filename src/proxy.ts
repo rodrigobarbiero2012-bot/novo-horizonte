@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_SESSAO, verificarSessao } from "./lib/sessao";
 
-// Tudo exige login, menos a tela de login, a de primeiro acesso e o cron
-// (que se autentica pelo CRON_SECRET na própria rota). A checagem definitiva
+// Tudo exige login, menos a tela de login, a de primeiro acesso, o cron e o webhook do WhatsApp
+// (que se autenticam na própria rota: CRON_SECRET e assinatura da Meta). A checagem definitiva
 // (usuário ainda existe no banco) fica em exigirUsuario(); aqui é só o filtro
 // rápido para não renderizar página nenhuma sem cookie válido.
 export async function proxy(request: NextRequest) {
@@ -12,5 +12,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|primeiro-acesso|api/cron|_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  matcher: ["/((?!login|primeiro-acesso|api/cron|api/whatsapp|_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };

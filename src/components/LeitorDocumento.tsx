@@ -17,6 +17,8 @@ type Props = {
   contas: Conta[];
   ler: (form: FormData) => Promise<ResultadoLeitura>;
   criar: (estado: EstadoFormulario, form: FormData) => Promise<EstadoFormulario>;
+  /** Documento já lido (recebido pelo WhatsApp): abre direto na revisão. */
+  inicial?: { previa: Previa; leitura: Extract<ResultadoLeitura, { ok: true }> };
 };
 
 type Etapa =
@@ -25,7 +27,7 @@ type Etapa =
   | { tipo: "revisar"; previa: Previa; leitura: Extract<ResultadoLeitura, { ok: true }>; chave: number }
   | { tipo: "gravado"; id?: string; comoTitulo?: boolean };
 
-type Previa = { url: string; pdf: boolean; nome: string };
+export type Previa = { url: string; pdf: boolean; nome: string };
 
 const valorTexto = (reais: number) => reais.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -34,8 +36,8 @@ function historicoSugerido(d: DocumentoLido) {
   return `pgto ${doc}${d.fornecedor ?? ""}${d.descricao ? ` — ${d.descricao}` : ""}`.replace(/\s+/g, " ").trim();
 }
 
-export function LeitorDocumento({ contas, ler, criar }: Props) {
-  const [etapa, setEtapa] = useState<Etapa>({ tipo: "escolher" });
+export function LeitorDocumento({ contas, ler, criar, inicial }: Props) {
+  const [etapa, setEtapa] = useState<Etapa>(inicial ? { tipo: "revisar", ...inicial, chave: 0 } : { tipo: "escolher" });
   const [arrastando, setArrastando] = useState(false);
   const [, iniciar] = useTransition();
   const [contador, setContador] = useState(0);

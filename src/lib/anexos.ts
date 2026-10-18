@@ -19,15 +19,19 @@ export function validarArquivo(arquivo: FormDataEntryValue | null): string | nul
 
 /**
  * Guarda o arquivo, já validado. Sem `destino`, fica solto até ser vinculado
- * (leitura de documento); arquivos soltos com mais de 1 dia são apagados aqui.
+ * (leitura de documento); arquivos soltos com mais de 1 dia, que não sejam de
+ * documento recebido pelo WhatsApp, são apagados aqui.
  */
 export async function guardarAnexo(
-  arquivo: File,
-  usuarioId: string,
+  arquivo: File | { name: string; type: string; dados: Buffer },
+  usuarioId: string | null,
   destino: { lancamentoId?: string; tituloId?: string } = {},
 ): Promise<string> {
-  const conteudo = Buffer.from(await arquivo.arrayBuffer());
-  await prisma.anexo.deleteMany({ where: { lancamentoId: null, tituloId: null, criadoEm: { lt: new Date(Date.now() - 86_400_000) } } });
+  const conteudo = new Uint8Array(arquivo instanceof File ? await arquivo.arrayBuffer() : arquivo.dados);
+  // Soltos há mais de 1 dia: leitura abandonada. Os que vieram pelo WhatsApp esperam a revisão.
+  await prisma.anexo.deleteMany({
+    where: { lancamentoId: null, tituloId: null, documentoRecebido: null, criadoEm: { lt: new Date(Date.now() - 86_400_000) } },
+  });
   const anexo = await prisma.anexo.create({
     data: {
       nome: arquivo.name.slice(0, 200) || "documento",
@@ -51,4 +55,6 @@ export async function vincularAnexo(
 ) {
   if (typeof anexoId !== "string" || !anexoId) return;
   await tx.anexo.updateMany({ where: { id: anexoId, lancamentoId: null, tituloId: null }, data: destino });
+  // Se veio pelo WhatsApp, o documento sai da caixa de entrada.
+  await tx.documentoRecebido.updateMany({ where: { anexoId, status: "PENDENTE" }, data: { status: "GRAVADO" } });
 }

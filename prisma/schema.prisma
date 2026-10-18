@@ -264,8 +264,28 @@ model Anexo {
   criadoPorId  String?
   criadoEm     DateTime    @default(now())
 
+  documentoRecebido DocumentoRecebido?
+
   @@index([lancamentoId])
   @@index([tituloId])
+}
+
+// Documento que chegou pelo WhatsApp: arquivo guardado e lido pela IA, à
+// espera de um sócio conferir e gravar (vira lançamento ou conta a pagar) ou descartar.
+model DocumentoRecebido {
+  id         String   @id @default(cuid())
+  canal      String // "WHATSAPP"
+  mensagemId String   @unique // id da mensagem no WhatsApp: a Meta pode reenviar a mesma notificação
+  remetente  String // número que enviou, só dígitos com DDI
+  legenda    String?
+  anexoId    String?  @unique
+  anexo      Anexo?   @relation(fields: [anexoId], references: [id], onDelete: SetNull)
+  leitura    Json? // resultado de analisarDocumento quando ok
+  erro       String? // motivo, quando não deu para ler
+  status     String   @default("PENDENTE") // "PENDENTE" | "GRAVADO" | "DESCARTADO"
+  criadoEm   DateTime @default(now())
+
+  @@index([status])
 }
 
 // Parâmetros gerenciais editáveis na tela (ex.: taxas de depreciação por conta,

@@ -17,7 +17,7 @@ import { exigirUsuario } from "@/lib/usuario";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento, taxas] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento, taxas, recebidos] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     resumoCotacoes(),
@@ -36,6 +36,7 @@ async function Conteudo() {
     prisma.movimentoProducao.groupBy({ by: ["atividade"] }),
     prisma.orcamentoItem.findMany({ where: { ano: new Date().getFullYear() } }),
     taxasDepreciacao(),
+    prisma.documentoRecebido.count({ where: { status: "PENDENTE" } }),
   ]);
   const taxasAConfirmar = taxas.filter((t) => !t.definida && t.confirmar);
   const comDados = new Set([...comTalhao, ...comMovimento].map((g) => g.atividade));
@@ -132,6 +133,14 @@ async function Conteudo() {
               .{" "}
               <Link href="/a-pagar-receber" className="underline">
                 Ver contas
+              </Link>
+            </li>
+          )}
+          {recebidos > 0 && (
+            <li>
+              <strong>WhatsApp:</strong> {recebidos} documento{recebidos > 1 ? "s" : ""} recebido{recebidos > 1 ? "s" : ""} aguardando conferência.{" "}
+              <Link href="/lancamentos/ler" className="underline">
+                Conferir
               </Link>
             </li>
           )}
