@@ -2,12 +2,18 @@
 
 import { useActionState, useState } from "react";
 import type { EstadoCotacao } from "@/app/(app)/acoes-cotacao";
+import { useCampos } from "./useCampos";
 
 type Props = { produto: string; acao: (e: EstadoCotacao, f: FormData) => Promise<EstadoCotacao> };
 
 /** Formulário compacto dentro do cartão da cotação: abre ao clicar em "Registrar preço". */
 export function FormularioCotacaoManual({ produto, acao }: Props) {
-  const [estado, acaoForm, enviando] = useActionState(acao, undefined);
+  const { vincular, limpar } = useCampos(() => ({ valor: "", data: new Date().toLocaleDateString("sv-SE") }));
+  const [estado, acaoForm, enviando] = useActionState(async (e: EstadoCotacao, f: FormData) => {
+    const r = await acao(e, f);
+    if (r?.ok) limpar();
+    return r;
+  }, undefined);
   const [aberto, setAberto] = useState(false);
   const [ultimoOk, setUltimoOk] = useState<string | undefined>();
   // Fecha o formulário quando um registro novo dá certo; em caso de erro, continua aberto mostrando a mensagem.
@@ -30,7 +36,7 @@ export function FormularioCotacaoManual({ produto, acao }: Props) {
       <input type="hidden" name="produto" value={produto} />
       <div className="flex gap-1.5">
         <input
-          name="valor"
+          {...vincular("valor")}
           inputMode="decimal"
           placeholder="R$/kg"
           required
@@ -39,10 +45,9 @@ export function FormularioCotacaoManual({ produto, acao }: Props) {
           aria-label="Preço em R$ por kg"
         />
         <input
-          name="data"
+          {...vincular("data")}
           type="date"
           required
-          defaultValue={new Date().toLocaleDateString("sv-SE")}
           className="min-w-0 flex-1 rounded border border-stone-300 px-1.5 py-1 text-xs outline-none focus:border-folha-600"
           aria-label="Data do preço"
         />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { lerValorBr } from "@/lib/contabil/lancamento";
 import { botaoPrimario, botaoSecundario, campo } from "./ui";
+import { cancelarReset } from "./useCampos";
 import type { EstadoFormulario } from "@/app/(app)/lancamentos/acoes";
 
 type Conta = { id: string; nome: string; categoria: string };
@@ -91,7 +92,7 @@ export function FormularioLancamento({
   const porCategoria = Map.groupBy(contas, (c) => c.categoria);
 
   return (
-    <form action={acaoForm} className="space-y-5">
+    <form action={acaoForm} onReset={cancelarReset} className="space-y-5">
       {!edicao && <input type="hidden" name="origem" value={origem} />}
       {!edicao && anexoId && <input type="hidden" name="anexoId" value={anexoId} />}
       <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">

@@ -3,19 +3,25 @@
 import { useActionState } from "react";
 import { ATIVIDADES, CATEGORIAS } from "@/lib/contabil/tipos";
 import { botaoPrimario, campo } from "./ui";
+import { cancelarReset, useCampos } from "./useCampos";
 import type { EstadoConta } from "@/app/(app)/contas/acoes";
 
 export function FormularioConta({ acao }: { acao: (e: EstadoConta, f: FormData) => Promise<EstadoConta> }) {
-  const [estado, acaoForm, enviando] = useActionState(acao, undefined);
+  const { vincular, limpar } = useCampos({ nome: "", categoria: "", atividade: "" });
+  const [estado, acaoForm, enviando] = useActionState(async (e: EstadoConta, f: FormData) => {
+    const r = await acao(e, f);
+    if (r?.ok) limpar();
+    return r;
+  }, undefined);
   return (
-    <form action={acaoForm} className="grid gap-3 sm:grid-cols-[2fr_1.5fr_1fr_auto] sm:items-end">
+    <form action={acaoForm} onReset={cancelarReset} className="grid gap-3 sm:grid-cols-[2fr_1.5fr_1fr_auto] sm:items-end">
       <label className="block">
         <span className="text-xs font-medium text-stone-600">Nome</span>
-        <input name="nome" required placeholder="Ex.: Custeio Adubos - Maracujá" className={`${campo} mt-1`} />
+        <input {...vincular("nome")} required placeholder="Ex.: Custeio Adubos - Maracujá" className={`${campo} mt-1`} />
       </label>
       <label className="block">
         <span className="text-xs font-medium text-stone-600">Categoria</span>
-        <select name="categoria" required defaultValue="" className={`${campo} mt-1`}>
+        <select {...vincular("categoria")} required className={`${campo} mt-1`}>
           <option value="" disabled>
             Escolha…
           </option>
@@ -26,7 +32,7 @@ export function FormularioConta({ acao }: { acao: (e: EstadoConta, f: FormData) 
       </label>
       <label className="block">
         <span className="text-xs font-medium text-stone-600">Atividade</span>
-        <select name="atividade" required defaultValue="" className={`${campo} mt-1`}>
+        <select {...vincular("atividade")} required className={`${campo} mt-1`}>
           <option value="" disabled>
             Escolha…
           </option>

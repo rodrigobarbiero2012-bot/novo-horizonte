@@ -7,6 +7,7 @@ import { dataBr, reais } from "@/lib/formato";
 import { BotaoAnexar, LinkAnexo } from "../Anexos";
 import { FAIXAS, type Faixa, type TipoTitulo } from "@/lib/titulos/regras";
 import { campo } from "../ui";
+import { cancelarReset, useCampos } from "../useCampos";
 
 export type TituloLinha = {
   id: string;
@@ -106,6 +107,7 @@ function LinhaAberta({
 }) {
   const [aberto, setAberto] = useState(false);
   const [estado, acao, enviando] = useActionState(baixarTitulo.bind(null, t.id), undefined);
+  const { vincular } = useCampos({ data: hoje, contaBaixaId: contaBaixaPadrao ?? "", valor: valorTexto(t.valorCentavos) });
   const [, iniciar] = useTransition();
 
   return (
@@ -157,14 +159,14 @@ function LinhaAberta({
         </span>
       </div>
       {aberto && !estado?.ok && (
-        <form action={acao} className="mt-2 flex flex-wrap items-end gap-2 rounded-md bg-stone-50 p-3">
+        <form action={acao} onReset={cancelarReset} className="mt-2 flex flex-wrap items-end gap-2 rounded-md bg-stone-50 p-3">
           <label className="block">
             <span className="text-xs text-stone-600">Data</span>
-            <input name="data" type="date" required defaultValue={hoje} className={`${campo} mt-0.5 w-40`} />
+            <input {...vincular("data")} type="date" required className={`${campo} mt-0.5 w-40`} />
           </label>
           <label className="block">
             <span className="text-xs text-stone-600">{verbo === "Pagar" ? "Pago com" : "Recebido em"}</span>
-            <select name="contaBaixaId" required defaultValue={contaBaixaPadrao ?? ""} className={`${campo} mt-0.5 w-56`}>
+            <select {...vincular("contaBaixaId")} required className={`${campo} mt-0.5 w-56`}>
               <option value="" disabled>
                 Escolha…
               </option>
@@ -177,7 +179,7 @@ function LinhaAberta({
           </label>
           <label className="block">
             <span className="text-xs text-stone-600">Valor</span>
-            <input name="valor" required inputMode="decimal" defaultValue={valorTexto(t.valorCentavos)} className={`${campo} mt-0.5 w-32 text-right tabular-nums`} />
+            <input {...vincular("valor")} required inputMode="decimal" className={`${campo} mt-0.5 w-32 text-right tabular-nums`} />
           </label>
           <button disabled={enviando} className="rounded-md bg-folha-700 px-3 py-2 text-sm font-medium text-white hover:bg-folha-800 disabled:opacity-50">
             {enviando ? "Gravando…" : `Confirmar`}

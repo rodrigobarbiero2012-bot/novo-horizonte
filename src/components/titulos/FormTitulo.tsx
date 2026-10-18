@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect } from "react";
 import { criarTitulo, type EstadoTitulo } from "@/app/(app)/a-pagar-receber/acoes";
 import type { TipoTitulo } from "@/lib/titulos/regras";
 import { botaoPrimario, campo } from "../ui";
+import { cancelarReset, useCampos } from "../useCampos";
 
 type Conta = { id: string; nome: string; categoria: string };
 
@@ -28,10 +29,17 @@ type Props = {
 };
 
 export function FormTitulo({ tipo, contas, inicial, origem = "MANUAL", anexoId, aoGravar }: Props) {
-  const form = useRef<HTMLFormElement>(null);
+  const { vincular, limpar } = useCampos({
+    descricao: inicial?.descricao ?? "",
+    contraparte: inicial?.contraparte ?? "",
+    valor: inicial?.valor ?? "",
+    vencimento: inicial?.vencimento ?? "",
+    contaId: inicial?.contaId ?? "",
+    parcelas: "1",
+  });
   const [estado, acao, enviando] = useActionState(async (e: EstadoTitulo, f: FormData) => {
     const r = await criarTitulo(e, f);
-    if (r?.ok && !inicial) form.current?.reset();
+    if (r?.ok && !inicial) limpar();
     return r;
   }, undefined);
   useEffect(() => {
@@ -42,7 +50,7 @@ export function FormTitulo({ tipo, contas, inicial, origem = "MANUAL", anexoId, 
   const pagar = tipo === "PAGAR";
 
   return (
-    <form ref={form} action={acao} className="space-y-3">
+    <form action={acao} onReset={cancelarReset} className="space-y-3">
       <input type="hidden" name="tipo" value={tipo} />
       <input type="hidden" name="origem" value={origem} />
       {anexoId && <input type="hidden" name="anexoId" value={anexoId} />}
@@ -52,30 +60,32 @@ export function FormTitulo({ tipo, contas, inicial, origem = "MANUAL", anexoId, 
         <label className="block">
           <span className="text-xs font-medium text-stone-600">Descrição</span>
           <input
-            name="descricao"
+            {...vincular("descricao")}
             required
-            defaultValue={inicial?.descricao}
             placeholder={pagar ? "Ex.: Adubo 20-05-20 — NF 1234" : "Ex.: Venda de 100 sacas — Cooxupé"}
             className={`${campo} mt-1`}
           />
         </label>
         <label className="block">
           <span className="text-xs font-medium text-stone-600">{pagar ? "Fornecedor" : "Cliente"}</span>
-          <input name="contraparte" defaultValue={inicial?.contraparte} className={`${campo} mt-1`} />
+          <input {...vincular("contraparte")} className={`${campo} mt-1`} />
         </label>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[8rem_10rem_1fr_6rem]">
+      {/* Duas linhas: o cartão é estreito e quatro campos lado a lado espremiam a conta e estouravam as parcelas. */}
+      <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-xs font-medium text-stone-600">Valor total</span>
-          <input name="valor" required inputMode="decimal" placeholder="0,00" defaultValue={inicial?.valor} className={`${campo} mt-1 text-right tabular-nums`} />
+          <input {...vincular("valor")} required inputMode="decimal" placeholder="0,00" className={`${campo} mt-1 text-right tabular-nums`} />
         </label>
         <label className="block">
           <span className="text-xs font-medium text-stone-600">{pagar ? "Vencimento" : "Previsão"} (1ª parcela)</span>
-          <input name="vencimento" type="date" required defaultValue={inicial?.vencimento} className={`${campo} mt-1`} />
+          <input {...vincular("vencimento")} type="date" required className={`${campo} mt-1`} />
         </label>
-        <label className="block">
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
+        <label className="block min-w-0">
           <span className="text-xs font-medium text-stone-600">Conta</span>
-          <select name="contaId" required defaultValue={inicial?.contaId ?? ""} className={`${campo} mt-1`}>
+          <select {...vincular("contaId")} required className={`${campo} mt-1`}>
             <option value="" disabled>
               Escolha…
             </option>
@@ -92,7 +102,7 @@ export function FormTitulo({ tipo, contas, inicial, origem = "MANUAL", anexoId, 
         </label>
         <label className="block">
           <span className="text-xs font-medium text-stone-600">Parcelas</span>
-          <input name="parcelas" type="number" min={1} max={60} defaultValue={1} className={`${campo} mt-1 text-right`} />
+          <input {...vincular("parcelas")} type="number" min={1} max={60} className={`${campo} mt-1 text-right`} />
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-3">

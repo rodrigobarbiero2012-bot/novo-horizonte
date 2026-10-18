@@ -12,6 +12,7 @@ import {
 } from "@/app/(app)/conciliacao/acoes";
 import { dataBr, reais } from "@/lib/formato";
 import { botaoPrimario, botaoSecundario, campo } from "../ui";
+import { cancelarReset, useCampos } from "../useCampos";
 
 type Conta = { id: string; nome: string; categoria: string };
 
@@ -52,6 +53,7 @@ export function LinhaPendente({ t, contas, contaId }: { t: Pendente; contas: Con
   const [escolhida, setEscolhida] = useState(t.candidatas[0]?.id ?? "");
   const [pendente, iniciar] = useTransition();
   const [estado, acao, enviando] = useActionState(lancarTransacao.bind(null, t.id), undefined);
+  const { vincular } = useCampos({ contaId: "", historico: t.descricao });
   const porCategoria = Map.groupBy(
     contas.filter((c) => c.id !== contaId),
     (c) => c.categoria,
@@ -100,10 +102,10 @@ export function LinhaPendente({ t, contas, contaId }: { t: Pendente; contas: Con
         {t.candidatas.length === 0 && <span className="text-amber-700">sem lançamento correspondente no sistema</span>}
       </div>
       {modo === "lancar" && !estado?.ok && (
-        <form action={acao} className="mt-2 ml-24 flex flex-wrap items-end gap-2 rounded-md bg-stone-50 p-3">
+        <form action={acao} onReset={cancelarReset} className="mt-2 ml-24 flex flex-wrap items-end gap-2 rounded-md bg-stone-50 p-3">
           <label className="block">
             <span className="text-xs text-stone-600">{entrada ? "Origem do dinheiro (crédito)" : "Para onde foi (débito)"}</span>
-            <select name="contaId" required defaultValue="" className={`${campo} mt-0.5 w-64`}>
+            <select {...vincular("contaId")} required className={`${campo} mt-0.5 w-64`}>
               <option value="" disabled>
                 Escolha a conta…
               </option>
@@ -120,7 +122,7 @@ export function LinhaPendente({ t, contas, contaId }: { t: Pendente; contas: Con
           </label>
           <label className="block min-w-60 flex-1">
             <span className="text-xs text-stone-600">Histórico</span>
-            <input name="historico" required defaultValue={t.descricao} className={`${campo} mt-0.5`} />
+            <input {...vincular("historico")} required className={`${campo} mt-0.5`} />
           </label>
           <button disabled={enviando} className="rounded-md bg-folha-700 px-3 py-2 text-sm font-medium text-white hover:bg-folha-800 disabled:opacity-50">
             {enviando ? "Gravando…" : "Gravar e conciliar"}

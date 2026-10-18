@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { acaoEntrar } from "./actions";
 
 export default function LoginPage() {
   const [estado, acao, enviando] = useActionState(acaoEntrar, undefined);
+  // E-mail controlado para não sumir quando a senha está errada (o React limpa o formulário após o envio).
+  const [email, setEmail] = useState("");
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-folha-900 px-4">
@@ -19,6 +21,8 @@ export default function LoginPage() {
             <span className="text-sm font-medium text-stone-700">E-mail</span>
             <input
               name="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               type="email"
               autoComplete="username"
               required
