@@ -65,10 +65,10 @@ export const campo =
   "w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-folha-600 focus:ring-2 focus:ring-folha-100";
 
 /** Baixa o relatório da tela em Excel (.xlsx), com os mesmos filtros. */
-export function BotaoExportar({ href }: { href: string }) {
+export function BotaoExportar({ href, rotulo = "Exportar planilha" }: { href: string; rotulo?: string }) {
   return (
     <a href={href} download className={botaoSecundario} title="Baixar em Excel (.xlsx)">
-      ⬇ Exportar planilha
+      ⬇ {rotulo}
     </a>
   );
 }

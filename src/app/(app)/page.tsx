@@ -17,7 +17,7 @@ import { exigirUsuario } from "@/lib/usuario";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento, taxas, recebidos] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento, taxas, recebidos, ultimoBackup] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     resumoCotacoes(),
@@ -37,6 +37,7 @@ async function Conteudo() {
     prisma.orcamentoItem.findMany({ where: { ano: new Date().getFullYear() } }),
     taxasDepreciacao(),
     prisma.documentoRecebido.count({ where: { status: "PENDENTE" } }),
+    prisma.registroAuditoria.findFirst({ where: { entidade: "Backup" }, orderBy: { em: "desc" }, select: { em: true } }),
   ]);
   const taxasAConfirmar = taxas.filter((t) => !t.definida && t.confirmar);
   const comDados = new Set([...comTalhao, ...comMovimento].map((g) => g.atividade));
@@ -44,6 +45,8 @@ async function Conteudo() {
 
   // Período: do início do ano até o último lançamento, contra o mesmo período do ano anterior.
   const hoje = new Date().toLocaleDateString("sv-SE");
+  // Backup em planilha: lembrar quando o último tiver mais de 30 dias (ou nunca foi feito).
+  const diasDesdeBackup = ultimoBackup ? Math.round((Date.parse(hoje) - Date.parse(ultimoBackup.em.toLocaleDateString("sv-SE"))) / 86_400_000) : null;
   const ano = anos.at(-1)!;
   const ultimaData = partidas.reduce((m, p) => (p.data > m ? p.data : m), "");
   const fim = ultimaData.startsWith(String(ano)) ? ultimaData : `${ano}-01-01`;
@@ -134,6 +137,15 @@ async function Conteudo() {
               <Link href="/a-pagar-receber" className="underline">
                 Ver contas
               </Link>
+            </li>
+          )}
+          {(diasDesdeBackup === null || diasDesdeBackup > 30) && (
+            <li>
+              <strong>Backup:</strong> {diasDesdeBackup === null ? "nenhum backup baixado ainda" : `o último foi há ${diasDesdeBackup} dias`}. Guarde uma cópia da base
+              em planilha uma vez por mês.{" "}
+              <a href="/api/exportar/backup" download className="underline">
+                Baixar backup completo
+              </a>
             </li>
           )}
           {recebidos > 0 && (

@@ -21,8 +21,10 @@ export type Relatorio = {
 export type Lista = {
   titulo: string;
   subtitulo?: string;
-  colunas: { titulo: string; tipo: "texto" | "data" | "moeda"; largura?: number }[];
+  colunas: { titulo: string; tipo: "texto" | "data" | "moeda" | "numero"; largura?: number }[];
   linhas: (string | number | null)[][]; // moeda em centavos; data em "aaaa-mm-dd"
+  /** Nome da aba, quando diferente do título (máx. 31 caracteres). */
+  aba?: string;
 };
 
 const MOEDA = '#,##0.00;[Red]-#,##0.00;"–"';
@@ -95,9 +97,8 @@ export async function relatorioParaExcel(r: Relatorio): Promise<Buffer> {
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-export async function listaParaExcel(l: Lista): Promise<Buffer> {
-  const wb = novoArquivo();
-  const ws = wb.addWorksheet(l.titulo.slice(0, 31).replace(/[\\/?*[\]:]/g, "-"));
+function adicionarLista(wb: ExcelJS.Workbook, l: Lista) {
+  const ws = wb.addWorksheet((l.aba ?? l.titulo).slice(0, 31).replace(/[\\/?*[\]:]/g, "-"));
   cabecalhoPlanilha(ws, l.titulo, l.subtitulo, l.colunas.length);
   const cab = ws.addRow(l.colunas.map((c) => c.titulo));
   cab.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -123,9 +124,20 @@ export async function listaParaExcel(l: Lista): Promise<Buffer> {
     col.width = c.largura ?? (c.tipo === "texto" ? 30 : 14);
     if (c.tipo === "moeda") col.numFmt = MOEDA;
     if (c.tipo === "data") col.numFmt = "dd/mm/yyyy";
+    if (c.tipo === "numero") col.numFmt = "#,##0.####";
   });
-  ws.autoFilter = { from: { row: linhaCabecalho, column: 1 }, to: { row: linhaCabecalho, column: l.colunas.length } };
+  if (l.linhas.length) ws.autoFilter = { from: { row: linhaCabecalho, column: 1 }, to: { row: linhaCabecalho, column: l.colunas.length } };
   ws.views = [{ state: "frozen", ySplit: linhaCabecalho }];
+}
+
+export async function listaParaExcel(l: Lista): Promise<Buffer> {
+  return listasParaExcel([l]);
+}
+
+/** Várias listas no mesmo arquivo, uma por aba (ex.: backup completo). */
+export async function listasParaExcel(listas: Lista[]): Promise<Buffer> {
+  const wb = novoArquivo();
+  for (const l of listas) adicionarLista(wb, l);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 

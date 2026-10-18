@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FormularioConta } from "@/components/FormularioConta";
-import { Cabecalho, Cartao, Valor } from "@/components/ui";
+import { BotaoExportar, Cabecalho, Cartao, Valor } from "@/components/ui";
 import { CATEGORIAS } from "@/lib/contabil/tipos";
 import { prisma } from "@/lib/db";
 import { exigirUsuario } from "@/lib/usuario";
@@ -23,7 +23,9 @@ async function Conteudo() {
       <Cabecalho
         titulo="Plano de contas"
         subtitulo="A categoria define a linha da DRE ou do Balanço; a atividade separa café, maracujá, pecuária."
-      />
+      >
+        <BotaoExportar href="/api/exportar/backup" rotulo="Backup completo" />
+      </Cabecalho>
       <Cartao className="mb-6 p-5">
         <h2 className="mb-3 text-sm font-semibold text-stone-700">Nova conta</h2>
         <FormularioConta acao={criarConta} />

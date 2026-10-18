@@ -1,14 +1,16 @@
+import { revalidatePath } from "next/cache";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { filtroLancamentos } from "@/lib/lancamentos/filtro";
 import { ehLinhaOrcamento, matrizVazia, mesDeCorte, realizadoMensal } from "@/lib/orcamento/calculo";
-import { listaParaExcel, modeloImportacao, relatorioParaExcel } from "@/lib/relatorios/excel";
+import { montarBackup } from "@/lib/relatorios/backup";
+import { listaParaExcel, listasParaExcel, modeloImportacao, relatorioParaExcel } from "@/lib/relatorios/excel";
 import { relatorioBalanco, relatorioDre, relatorioFluxo, relatorioOrcamento } from "@/lib/relatorios/tabelas";
 import { exigirUsuario } from "@/lib/usuario";
 
 // Exportação para Excel (.xlsx) dos relatórios, com os mesmos filtros da tela.
 //   /api/exportar/dre · /balanco · /fluxo?visao=2025 · /orcamento?ano=2026&ate=10 · /lancamentos?<filtros da lista>
-//   /api/exportar/modelo-importacao (planilha modelo para importar lançamentos)
+//   /api/exportar/modelo-importacao (planilha modelo para importar lançamentos) · /backup (tudo, uma aba por tipo)
 
 const LIMITE_LANCAMENTOS = 50_000;
 
@@ -23,7 +25,7 @@ function arquivo(conteudo: Buffer, nome: string) {
 }
 
 export async function GET(request: Request, { params }: RouteContext<"/api/exportar/[relatorio]">) {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
   const { relatorio } = await params;
   const sp = Object.fromEntries(new URL(request.url).searchParams);
   const hoje = new Date().toLocaleDateString("sv-SE");
@@ -93,6 +95,16 @@ export async function GET(request: Request, { params }: RouteContext<"/api/expor
         ]),
       });
       return arquivo(lista, `Lançamentos Novo Horizonte ${hoje}.xlsx`);
+    }
+    case "backup": {
+      const listas = await montarBackup();
+      const conteudo = await listasParaExcel(listas);
+      // Registra o backup: o painel avisa quando o último tiver mais de 30 dias.
+      await prisma.registroAuditoria.create({
+        data: { usuarioId: usuario.id, entidade: "Backup", entidadeId: hoje, acao: "EXPORTAR", depois: { abas: listas.map((l) => `${l.aba}: ${l.linhas.length}`), bytes: conteudo.length } },
+      });
+      revalidatePath("/"); // tira o aviso de backup do painel
+      return arquivo(conteudo, `Backup Novo Horizonte ${hoje}.xlsx`);
     }
     case "modelo-importacao": {
       const contas = await prisma.conta.findMany({ where: { ativa: true }, orderBy: [{ categoria: "asc" }, { nome: "asc" }], select: { nome: true, categoria: true, atividade: true } });
