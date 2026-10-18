@@ -34,7 +34,7 @@ async function Conteudo({ searchParams }: PageProps<"/a-pagar-receber">) {
   const tipo: TipoTitulo = (await searchParams).tipo === "receber" ? "RECEBER" : "PAGAR";
   const { hoje, em30, desde60, desde120 } = referencias();
 
-  const [contas, abertos, baixados, saldoCaixa, pagamentos] = await Promise.all([
+  const [contas, abertos, baixados, saldoCaixa, pagamentos, anexos] = await Promise.all([
     contasAtivas(),
     prisma.titulo.findMany({ where: { status: "ABERTO" }, orderBy: [{ vencimento: "asc" }, { criadoEm: "asc" }], include: { conta: { select: { nome: true } } } }),
     prisma.titulo.findMany({
@@ -50,7 +50,18 @@ async function Conteudo({ searchParams }: PageProps<"/a-pagar-receber">) {
       where: { valorCentavos: { lt: 0 }, data: { gte: desde120 }, conta: { categoria: { in: CATEGORIAS_BAIXA } } },
       select: { contaId: true },
     }),
+    prisma.anexo.findMany({
+      where: { tituloId: { not: null } },
+      select: { id: true, nome: true, tituloId: true, titulo: { select: { grupoParcelasId: true } } },
+      orderBy: { criadoEm: "asc" },
+    }),
   ]);
+
+  // Arquivos por título; no parcelamento, o arquivo (guardado numa parcela) vale para todas.
+  const anexosDe = (t: { id: string; grupoParcelasId: string | null }) =>
+    anexos
+      .filter((a) => a.tituloId === t.id || (t.grupoParcelasId && a.titulo?.grupoParcelasId === t.grupoParcelasId))
+      .map(({ id, nome }) => ({ id, nome }));
 
   const contasTitulo = contas.filter((c) => categoriasDoTitulo(tipo).includes(c.categoria));
   const contasBaixa = contas.filter((c) => CATEGORIAS_BAIXA.includes(c.categoria)).map(({ id, nome }) => ({ id, nome }));
@@ -66,6 +77,7 @@ async function Conteudo({ searchParams }: PageProps<"/a-pagar-receber">) {
     conta: t.conta.nome,
     parcela: t.parcela ? `${t.parcela}/${t.totalParcelas}` : null,
     faixa: faixaDoVencimento(iso(t.vencimento), hoje),
+    anexos: anexosDe(t),
   }));
   const linhasBaixadas: TituloBaixado[] = baixados.map((b) => ({
     id: b.id,
@@ -75,6 +87,7 @@ async function Conteudo({ searchParams }: PageProps<"/a-pagar-receber">) {
     baixadoEm: iso(b.baixadoEm!),
     contaBaixa: b.contaBaixa?.nome ?? "—",
     lancamentoId: b.lancamentoId,
+    anexos: anexosDe(b),
   }));
 
   // Resumo e projeção usam os dois tipos.

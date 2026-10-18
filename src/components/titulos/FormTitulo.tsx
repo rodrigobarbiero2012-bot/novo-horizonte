@@ -22,10 +22,12 @@ type Props = {
   contas: Conta[]; // já filtradas para o tipo
   inicial?: InicialTitulo;
   origem?: "MANUAL" | "DOCUMENTO";
+  /** Arquivo do documento lido, ligado ao título ao gravar. */
+  anexoId?: string;
   aoGravar?: () => void;
 };
 
-export function FormTitulo({ tipo, contas, inicial, origem = "MANUAL", aoGravar }: Props) {
+export function FormTitulo({ tipo, contas, inicial, origem = "MANUAL", anexoId, aoGravar }: Props) {
   const form = useRef<HTMLFormElement>(null);
   const [estado, acao, enviando] = useActionState(async (e: EstadoTitulo, f: FormData) => {
     const r = await criarTitulo(e, f);
@@ -43,6 +45,7 @@ export function FormTitulo({ tipo, contas, inicial, origem = "MANUAL", aoGravar 
     <form ref={form} action={acao} className="space-y-3">
       <input type="hidden" name="tipo" value={tipo} />
       <input type="hidden" name="origem" value={origem} />
+      {anexoId && <input type="hidden" name="anexoId" value={anexoId} />}
       <input type="hidden" name="numeroDocumento" value={inicial?.numeroDocumento ?? ""} />
       <input type="hidden" name="linhaDigitavel" value={inicial?.linhaDigitavel ?? ""} />
       <div className="grid gap-3 sm:grid-cols-2">

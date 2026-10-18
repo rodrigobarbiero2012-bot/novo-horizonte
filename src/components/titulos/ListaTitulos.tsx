@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
 import { baixarTitulo, estornarBaixa, excluirTitulo } from "@/app/(app)/a-pagar-receber/acoes";
 import { dataBr, reais } from "@/lib/formato";
+import { BotaoAnexar, LinkAnexo } from "../Anexos";
 import { FAIXAS, type Faixa, type TipoTitulo } from "@/lib/titulos/regras";
 import { campo } from "../ui";
 
@@ -16,6 +17,7 @@ export type TituloLinha = {
   conta: string;
   parcela: string | null; // "2/10"
   faixa: Faixa;
+  anexos: { id: string; nome: string }[];
 };
 
 export type TituloBaixado = {
@@ -26,6 +28,7 @@ export type TituloBaixado = {
   baixadoEm: string;
   contaBaixa: string;
   lancamentoId: string | null;
+  anexos: { id: string; nome: string }[];
 };
 
 type ContaBaixa = { id: string; nome: string };
@@ -119,6 +122,12 @@ function LinhaAberta({
           <span className="block truncate text-xs text-stone-500">
             {t.contraparte ? `${t.contraparte} · ` : ""}
             {t.conta}
+            {t.anexos.map((a) => (
+              <span key={a.id}>
+                {" · "}
+                <LinkAnexo anexo={a}>📎 {a.nome}</LinkAnexo>
+              </span>
+            ))}
           </span>
         </span>
         <span className="num w-28 text-sm font-medium">{reais(t.valorCentavos)}</span>
@@ -130,6 +139,11 @@ function LinhaAberta({
           >
             {verbo}
           </button>
+          {t.anexos.length === 0 && (
+            <span className="text-xs opacity-0 focus-within:opacity-100 group-hover:opacity-100">
+              <BotaoAnexar destino={{ tituloId: t.id }} rotulo="📎" />
+            </span>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -185,6 +199,11 @@ function LinhaBaixada({ titulo: b }: { titulo: TituloBaixado }) {
         {b.contraparte ? ` — ${b.contraparte}` : ""} <span className="text-xs text-stone-400">({b.contaBaixa})</span>
       </span>
       <span className="num w-28">{reais(b.valorBaixaCentavos)}</span>
+      {b.anexos.map((a) => (
+        <LinkAnexo key={a.id} anexo={a}>
+          📎
+        </LinkAnexo>
+      ))}
       {b.lancamentoId && (
         <Link href={`/lancamentos/${b.lancamentoId}`} className="text-xs text-folha-700 hover:underline">
           lançamento

@@ -109,7 +109,7 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
       orderBy,
       skip: pular,
       take: POR_PAGINA,
-      include: { conta: { select: { nome: true } }, lancamento: { select: { id: true, historico: true } } },
+      include: { conta: { select: { nome: true } }, lancamento: { select: { id: true, historico: true, _count: { select: { anexos: true } } } } },
     }),
     comSaldo
       ? prisma.partida.aggregate({ where: { contaId, ...(ate && { data: { lte: new Date(ate) } }) }, _sum: { valorCentavos: true } })
@@ -260,6 +260,11 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
                 </td>
                 <td className="px-3 py-1.5 text-stone-700">{p.conta.nome}</td>
                 <td className="max-w-md truncate px-3 py-1.5 text-stone-600" title={p.historico ?? p.lancamento.historico ?? ""}>
+                  {p.lancamento._count.anexos > 0 && (
+                    <span className="mr-1" title="Tem documento anexado">
+                      📎
+                    </span>
+                  )}
                   {p.historico ?? p.lancamento.historico}
                 </td>
                 <td className="num px-3 py-1.5">{p.valorCentavos > 0 ? reais(p.valorCentavos) : ""}</td>

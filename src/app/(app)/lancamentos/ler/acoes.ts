@@ -1,13 +1,13 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { guardarAnexo, validarArquivo } from "@/lib/anexos";
 import { prisma } from "@/lib/db";
-import { ehTipoAceito, type DocumentoLido } from "@/lib/documentos/esquema";
+import type { DocumentoLido, TipoAceito } from "@/lib/documentos/esquema";
 import { LeituraIndisponivel, lerDocumento } from "@/lib/documentos/leitura";
 import { contaMaisUsada, termosDoFornecedor } from "@/lib/documentos/sugestoes";
 import { exigirUsuario } from "@/lib/usuario";
 
-const TAMANHO_MAXIMO = 4 * 1024 * 1024;
 // Contas onde o valor de um boleto/nota normalmente vai (débito).
 const CATEGORIAS_DESTINO = ["Custeio", "Despesa Administrativa", "Despesa Financeira", "Ativo Imobilizado", "Ativo Estoque"];
 // Contas de onde o pagamento costuma sair (crédito).
@@ -21,15 +21,15 @@ export type ResultadoLeitura =
       origemConta: "historico" | "ia" | null;
       vezesNoHistorico: number;
       contaCreditoId: string | null;
+      anexoId: string; // arquivo guardado, a vincular quando o lançamento ou a conta a pagar for gravado
     }
   | { ok: false; erro: string };
 
 export async function lerDocumentoAcao(form: FormData): Promise<ResultadoLeitura> {
   const usuario = await exigirUsuario();
   const arquivo = form.get("arquivo");
-  if (!(arquivo instanceof File) || arquivo.size === 0) return { ok: false, erro: "Escolha um arquivo." };
-  if (!ehTipoAceito(arquivo.type)) return { ok: false, erro: "Envie um PDF ou uma foto (JPG, PNG, WEBP)." };
-  if (arquivo.size > TAMANHO_MAXIMO) return { ok: false, erro: "Arquivo acima de 4 MB. Tire uma foto mais leve ou envie o PDF." };
+  const invalido = validarArquivo(arquivo);
+  if (invalido || !(arquivo instanceof File)) return { ok: false, erro: invalido ?? "Escolha um arquivo." };
 
   const contas = await prisma.conta.findMany({
     where: { ativa: true },
@@ -40,7 +40,7 @@ export async function lerDocumentoAcao(form: FormData): Promise<ResultadoLeitura
   let documento: DocumentoLido;
   try {
     documento = await lerDocumento(
-      { dados: Buffer.from(await arquivo.arrayBuffer()), tipo: arquivo.type },
+      { dados: Buffer.from(await arquivo.arrayBuffer()), tipo: arquivo.type as TipoAceito }, // já conferido em validarArquivo
       contas.filter((c) => CATEGORIAS_DESTINO.includes(c.categoria)),
     );
   } catch (e) {
@@ -108,5 +108,6 @@ export async function lerDocumentoAcao(form: FormData): Promise<ResultadoLeitura
     },
   });
 
-  return { ok: true, documento, contaDebitoId, origemConta, vezesNoHistorico, contaCreditoId };
+  const anexoId = await guardarAnexo(arquivo, usuario.id);
+  return { ok: true, documento, contaDebitoId, origemConta, vezesNoHistorico, contaCreditoId, anexoId };
 }

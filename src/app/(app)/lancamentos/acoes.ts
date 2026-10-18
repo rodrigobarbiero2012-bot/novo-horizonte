@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
+import { vincularAnexo } from "@/lib/anexos";
 import { prisma } from "@/lib/db";
 import { lerValorBr, validarLancamento, type LancamentoDigitado } from "@/lib/contabil/lancamento";
 import { exigirUsuario } from "@/lib/usuario";
@@ -97,6 +98,7 @@ export async function criarLancamento(_: EstadoFormulario, form: FormData): Prom
       },
       include: { partidas: true },
     });
+    await vincularAnexo(tx, form.get("anexoId"), { lancamentoId: novo.id });
     await tx.registroAuditoria.create({
       data: { usuarioId: usuario.id, entidade: "Lancamento", entidadeId: novo.id, acao: "CRIAR", depois: fotografia(novo) },
     });
@@ -145,7 +147,10 @@ export async function excluirLancamento(id: string) {
   const usuario = await exigirUsuario();
   await prisma.$transaction(async (tx) => {
     const antes = await tx.lancamento.findUniqueOrThrow({ where: { id }, include: { partidas: true } });
-    // Lançamento gerado pela baixa de uma conta a pagar/receber: o título volta a ficar em aberto.
+    // Lançamento gerado pela baixa de uma conta a pagar/receber: o título volta a ficar em aberto,
+    // levando os arquivos anexados ao lançamento.
+    const titulo = await tx.titulo.findUnique({ where: { lancamentoId: id }, select: { id: true } });
+    if (titulo) await tx.anexo.updateMany({ where: { lancamentoId: id }, data: { lancamentoId: null, tituloId: titulo.id } });
     await tx.titulo.updateMany({
       where: { lancamentoId: id },
       data: { status: "ABERTO", baixadoEm: null, valorBaixaCentavos: null, contaBaixaId: null, lancamentoId: null },

@@ -77,6 +77,7 @@ model Lancamento {
 
   partidas Partida[]
   titulo   Titulo?
+  anexos   Anexo[]
 
   @@index([data])
   @@index([origem])
@@ -145,6 +146,7 @@ model Titulo {
   origem             String      @default("MANUAL") // "MANUAL" | "DOCUMENTO"
   criadoPorId        String?
   criadoEm           DateTime    @default(now())
+  anexos             Anexo[]
 
   @@index([status, vencimento])
   @@index([grupoParcelasId])
@@ -242,6 +244,28 @@ model TarefaCronograma {
   criadoEm       DateTime  @default(now())
 
   @@index([atividade, ano])
+}
+
+// Arquivo do boleto, nota ou recibo, guardado no próprio banco (são poucos e
+// pequenos: até 4 MB, normalmente ~200 KB). Fica ligado ao lançamento ou à
+// conta a pagar/receber; parcelamentos guardam na 1ª parcela. Sem vínculo, é
+// um arquivo recém-lido ainda não gravado — apagado depois de 1 dia.
+model Anexo {
+  id           String      @id @default(cuid())
+  nome         String
+  tipo         String // MIME: application/pdf, image/jpeg, ...
+  tamanho      Int
+  sha256       String
+  conteudo     Bytes
+  lancamentoId String?
+  lancamento   Lancamento? @relation(fields: [lancamentoId], references: [id], onDelete: Cascade)
+  tituloId     String?
+  titulo       Titulo?     @relation(fields: [tituloId], references: [id], onDelete: Cascade)
+  criadoPorId  String?
+  criadoEm     DateTime    @default(now())
+
+  @@index([lancamentoId])
+  @@index([tituloId])
 }
 
 // Orçamento anual por linha da DRE e mês. `linha` é uma chave de LINHAS_DRE

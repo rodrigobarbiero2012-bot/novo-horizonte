@@ -26,6 +26,8 @@ type Props = {
   edicao?: boolean;
   /** Origem gravada no lançamento novo: "MANUAL" (padrão) ou "DOCUMENTO" (lido de boleto/nota). */
   origem?: "MANUAL" | "DOCUMENTO";
+  /** Arquivo do documento lido, ligado ao lançamento novo ao gravar. */
+  anexoId?: string;
   /** Chamado depois de gravar um lançamento novo, com o id criado. */
   aoGravar?: (id: string) => void;
   /** Mostra data e histórico por linha (lançamentos da planilha que têm pernas em datas diferentes). */
@@ -48,6 +50,7 @@ export function FormularioLancamento({
   inicial,
   edicao = false,
   origem = "MANUAL",
+  anexoId,
   aoGravar,
   detalharLinhas = false,
   textoBotao = "Gravar lançamento",
@@ -90,6 +93,7 @@ export function FormularioLancamento({
   return (
     <form action={acaoForm} className="space-y-5">
       {!edicao && <input type="hidden" name="origem" value={origem} />}
+      {!edicao && anexoId && <input type="hidden" name="anexoId" value={anexoId} />}
       <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
         <label className="block">
           <span className="text-sm font-medium text-stone-700">Data</span>

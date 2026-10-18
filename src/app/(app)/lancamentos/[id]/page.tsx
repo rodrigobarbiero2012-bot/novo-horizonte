@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { FormularioLancamento, type LinhaForm } from "@/components/FormularioLancamento";
+import { ListaAnexos } from "@/components/Anexos";
 import { Cabecalho, Cartao } from "@/components/ui";
+import { CAMPOS_ANEXO } from "@/lib/anexos";
 import { BotaoExcluir } from "@/components/BotaoExcluir";
 import { prisma } from "@/lib/db";
 import { contasAtivas } from "@/lib/consultas";
@@ -25,6 +27,8 @@ async function Conteudo({ params }: PageProps<"/lancamentos/[id]">) {
         partidas: { orderBy: [{ linhaPlanilha: "asc" }, { valorCentavos: "desc" }] },
         criadoPor: { select: { nome: true } },
         atualizadoPor: { select: { nome: true } },
+        anexos: { select: CAMPOS_ANEXO, orderBy: { criadoEm: "asc" } },
+        titulo: { select: { id: true, descricao: true, grupoParcelasId: true } },
       },
     }),
     contasAtivas(),
@@ -35,6 +39,17 @@ async function Conteudo({ params }: PageProps<"/lancamentos/[id]">) {
     }),
   ]);
   if (!lancamento) notFound();
+
+  // Arquivos da conta a pagar/receber que gerou o lançamento (no parcelamento, ficam na 1ª parcela).
+  const t = lancamento.titulo;
+  const anexosDoTitulo = t
+    ? await prisma.anexo.findMany({
+        where: t.grupoParcelasId ? { titulo: { grupoParcelasId: t.grupoParcelasId } } : { tituloId: t.id },
+        select: CAMPOS_ANEXO,
+        orderBy: { criadoEm: "asc" },
+      })
+    : [];
+  const resumo = (a: { id: string; nome: string; tipo: string; tamanho: number; criadoEm: Date }) => ({ ...a, criadoEm: iso(a.criadoEm) });
 
   const data = iso(lancamento.data);
   // Pernas com data ou histórico próprios (lotes da planilha) pedem a edição detalhada.
@@ -68,6 +83,16 @@ async function Conteudo({ params }: PageProps<"/lancamentos/[id]">) {
           detalharLinhas={detalhar}
           textoBotao="Gravar alterações"
         />
+      </Cartao>
+      <Cartao className="mt-6 max-w-6xl p-5">
+        <h2 className="mb-2 font-semibold text-stone-800">Documentos</h2>
+        <ListaAnexos anexos={lancamento.anexos.map(resumo)} destino={{ lancamentoId: id }} vazio="Nenhum boleto, nota ou comprovante anexado." />
+        {anexosDoTitulo.length > 0 && (
+          <div className="mt-4 border-t border-stone-100 pt-3">
+            <p className="mb-1 text-xs text-stone-500">Da conta a pagar/receber “{t!.descricao}”:</p>
+            <ListaAnexos anexos={anexosDoTitulo.map(resumo)} />
+          </div>
+        )}
       </Cartao>
       {historicoAlteracoes.length > 0 && (
         <div className="mt-6 max-w-6xl">

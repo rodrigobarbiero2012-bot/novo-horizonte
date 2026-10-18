@@ -6,6 +6,7 @@ import type { ResultadoLeitura } from "@/app/(app)/lancamentos/ler/acoes";
 import type { EstadoFormulario } from "@/app/(app)/lancamentos/acoes";
 import { TIPOS_DOCUMENTO, type DocumentoLido } from "@/lib/documentos/esquema";
 import { dataBr } from "@/lib/formato";
+import { comprimirImagem } from "@/lib/imagem";
 import { categoriasDoTitulo } from "@/lib/titulos/categorias";
 import { FormularioLancamento, type LinhaForm } from "./FormularioLancamento";
 import { FormTitulo } from "./titulos/FormTitulo";
@@ -25,22 +26,6 @@ type Etapa =
   | { tipo: "gravado"; id?: string; comoTitulo?: boolean };
 
 type Previa = { url: string; pdf: boolean; nome: string };
-
-const LADO_MAXIMO = 2000;
-
-/** Fotos de celular passam de 4 MB fácil; reduz para no máximo 2000 px em JPEG antes de enviar. */
-async function comprimirImagem(arquivo: File): Promise<File> {
-  if (!arquivo.type.startsWith("image/") || arquivo.type === "image/gif") return arquivo;
-  const bitmap = await createImageBitmap(arquivo);
-  const escala = Math.min(1, LADO_MAXIMO / Math.max(bitmap.width, bitmap.height));
-  if (escala === 1 && arquivo.size < 1_500_000) return arquivo;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * escala);
-  canvas.height = Math.round(bitmap.height * escala);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise<Blob>((ok) => canvas.toBlob((b) => ok(b!), "image/jpeg", 0.85));
-  return new File([blob], arquivo.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
-}
 
 const valorTexto = (reais: number) => reais.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -137,7 +122,8 @@ export function LeitorDocumento({ contas, ler, criar }: Props) {
         </label>
         {etapa.erro && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{etapa.erro}</p>}
         <p className="mt-4 text-xs text-stone-500">
-          A IA lê o documento e sugere o lançamento; nada é gravado sem você conferir e confirmar.
+          A IA lê o documento e sugere o lançamento; nada é gravado sem você conferir e confirmar. O arquivo fica guardado junto do
+          lançamento ou da conta a pagar.
         </p>
       </Cartao>
     );
@@ -228,6 +214,7 @@ function Destino({
             tipo="PAGAR"
             contas={contasPagar}
             origem="DOCUMENTO"
+            anexoId={leitura.anexoId}
             aoGravar={aoCriarTitulo}
             inicial={{
               descricao: (d.descricao || TIPOS_DOCUMENTO[d.tipo]) + (d.numeroDocumento ? ` — doc. ${d.numeroDocumento}` : ""),
@@ -243,7 +230,7 @@ function Destino({
       ) : (
         <>
           <p className="mb-3 text-sm text-stone-600">Grava o lançamento do pagamento agora.</p>
-          <FormularioLancamento contas={contas} acao={criar} origem="DOCUMENTO" aoGravar={aoGravar} inicial={montarInicial(leitura)} />
+          <FormularioLancamento contas={contas} acao={criar} origem="DOCUMENTO" anexoId={leitura.anexoId} aoGravar={aoGravar} inicial={montarInicial(leitura)} />
         </>
       )}
     </Cartao>

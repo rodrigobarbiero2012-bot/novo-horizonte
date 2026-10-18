@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { vincularAnexo } from "@/lib/anexos";
 import { prisma } from "@/lib/db";
 import { lerValorBr } from "@/lib/contabil/lancamento";
 import { CATEGORIAS_BAIXA, categoriasDoTitulo } from "@/lib/titulos/categorias";
@@ -51,7 +52,10 @@ export async function criarTitulo(_: EstadoTitulo, form: FormData): Promise<Esta
     criadoPorId: usuario.id,
   }));
   await prisma.$transaction(async (tx) => {
-    await tx.titulo.createMany({ data: dados });
+    const criados = await tx.titulo.createManyAndReturn({ data: dados, select: { id: true, parcela: true } });
+    // O arquivo do documento lido fica na 1ª parcela (a lista mostra para todas).
+    const primeira = criados.find((t) => (t.parcela ?? 1) === 1) ?? criados[0];
+    await vincularAnexo(tx, form.get("anexoId"), { tituloId: primeira.id });
     await tx.registroAuditoria.create({
       data: {
         usuarioId: usuario.id,
@@ -119,7 +123,11 @@ export async function estornarBaixa(id: string) {
       where: { id },
       data: { status: "ABERTO", baixadoEm: null, valorBaixaCentavos: null, contaBaixaId: null, lancamentoId: null },
     });
-    if (t.lancamentoId) await tx.lancamento.delete({ where: { id: t.lancamentoId } });
+    if (t.lancamentoId) {
+      // Comprovante anexado ao lançamento da baixa continua com o título.
+      await tx.anexo.updateMany({ where: { lancamentoId: t.lancamentoId }, data: { lancamentoId: null, tituloId: id } });
+      await tx.lancamento.delete({ where: { id: t.lancamentoId } });
+    }
     await tx.registroAuditoria.create({
       data: { usuarioId: usuario.id, entidade: "Titulo", entidadeId: id, acao: "ESTORNAR_BAIXA", antes: { lancamentoId: t.lancamentoId } },
     });
@@ -133,6 +141,11 @@ export async function excluirTitulo(id: string) {
   const usuario = await exigirUsuario();
   const t = await prisma.titulo.findUnique({ where: { id } });
   if (!t || t.status !== "ABERTO") return;
+  // Parcela com o arquivo do documento: o arquivo passa para outra parcela do mesmo parcelamento.
+  const outra = t.grupoParcelasId
+    ? await prisma.titulo.findFirst({ where: { grupoParcelasId: t.grupoParcelasId, id: { not: id } }, orderBy: { vencimento: "asc" }, select: { id: true } })
+    : null;
+  if (outra) await prisma.anexo.updateMany({ where: { tituloId: id }, data: { tituloId: outra.id } });
   await prisma.titulo.delete({ where: { id } });
   await prisma.registroAuditoria.create({
     data: {
