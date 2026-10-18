@@ -10,8 +10,8 @@ const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : 
 const simNao = (b: boolean | null | undefined) => (b === null || b === undefined ? null : b ? "sim" : "não");
 
 export async function montarBackup(): Promise<Lista[]> {
-  const [contas, lancamentos, titulos, talhoes, movimentos, orcamento, tarefas, cotacoes, configuracoes] = await Promise.all([
-    prisma.conta.findMany({ orderBy: [{ categoria: "asc" }, { nome: "asc" }] }),
+  const [contas, lancamentos, titulos, talhoes, movimentos, orcamento, tarefas, cotacoes, configuracoes, extratos, recebidos] = await Promise.all([
+    prisma.conta.findMany({ orderBy: [{ categoria: "asc" }, { nome: "asc" }], include: { apelidos: { select: { nome: true } } } }),
     prisma.lancamento.findMany({
       orderBy: [{ data: "asc" }, { criadoEm: "asc" }],
       select: {
@@ -23,7 +23,16 @@ export async function montarBackup(): Promise<Lista[]> {
         criadoPor: { select: { nome: true } },
         partidas: {
           orderBy: [{ linhaPlanilha: "asc" }, { valorCentavos: "desc" }],
-          select: { data: true, valorCentavos: true, historico: true, fiscal: true, linhaPlanilha: true, conta: { select: { nome: true } } },
+          select: {
+            id: true,
+            data: true,
+            valorCentavos: true,
+            valorNominalCentavos: true,
+            historico: true,
+            fiscal: true,
+            linhaPlanilha: true,
+            conta: { select: { nome: true } },
+          },
         },
       },
     }),
@@ -34,6 +43,11 @@ export async function montarBackup(): Promise<Lista[]> {
     prisma.tarefaCronograma.findMany({ orderBy: [{ atividade: "asc" }, { ano: "asc" }, { ordem: "asc" }] }),
     prisma.cotacao.findMany({ orderBy: [{ produto: "asc" }, { data: "asc" }] }),
     prisma.configuracao.findMany({ orderBy: { chave: "asc" } }),
+    prisma.transacaoBancaria.findMany({
+      orderBy: [{ contaId: "asc" }, { data: "asc" }],
+      include: { importacao: { select: { arquivo: true, conta: { select: { nome: true } } } } },
+    }),
+    prisma.documentoRecebido.findMany({ orderBy: { criadoEm: "asc" }, include: { anexo: { select: { nome: true } } } }),
   ]);
   const partidas = lancamentos.reduce((s, l) => s + l.partidas.length, 0);
 
@@ -55,6 +69,8 @@ export async function montarBackup(): Promise<Lista[]> {
         { titulo: "Origem", tipo: "texto", largura: 12 },
         { titulo: "Criado por", tipo: "texto", largura: 16 },
         { titulo: "Criado em", tipo: "data", largura: 12 },
+        { titulo: "Id da linha", tipo: "texto", largura: 28 },
+        { titulo: "Valor nominal (planilha)", tipo: "moeda" },
       ],
       linhas: lancamentos.flatMap((l) =>
         l.partidas.map((p) => [
@@ -70,6 +86,8 @@ export async function montarBackup(): Promise<Lista[]> {
           l.origem.toLowerCase(),
           l.criadoPor?.nome ?? null,
           iso(l.criadoEm),
+          p.id,
+          p.valorNominalCentavos,
         ]),
       ),
     },
@@ -82,8 +100,9 @@ export async function montarBackup(): Promise<Lista[]> {
         { titulo: "Atividade", tipo: "texto", largura: 12 },
         { titulo: "Natureza", tipo: "texto", largura: 9 },
         { titulo: "Ativa", tipo: "texto", largura: 7 },
+        { titulo: "Apelidos (nomes antigos da planilha)", tipo: "texto", largura: 50 },
       ],
-      linhas: contas.map((c) => [c.nome, c.categoria, c.atividade, c.natureza, simNao(c.ativa)]),
+      linhas: contas.map((c) => [c.nome, c.categoria, c.atividade, c.natureza, simNao(c.ativa), c.apelidos.map((a) => a.nome).join("; ") || null]),
     },
     {
       aba: "A pagar e receber",
@@ -184,6 +203,34 @@ export async function montarBackup(): Promise<Lista[]> {
         { titulo: "Origem", tipo: "texto", largura: 12 },
       ],
       linhas: cotacoes.map((c) => [c.produto, iso(c.data), c.valor, c.origem.toLowerCase()]),
+    },
+    {
+      aba: "Extratos bancários",
+      titulo: "Transações dos extratos importados (conciliação)",
+      colunas: [
+        { titulo: "Conta", tipo: "texto", largura: 28 },
+        { titulo: "Data", tipo: "data", largura: 12 },
+        { titulo: "Descrição", tipo: "texto", largura: 50 },
+        { titulo: "Valor", tipo: "moeda" },
+        { titulo: "Situação", tipo: "texto", largura: 11 },
+        { titulo: "Id da linha conciliada", tipo: "texto", largura: 28 },
+        { titulo: "FITID", tipo: "texto", largura: 24 },
+        { titulo: "Arquivo", tipo: "texto", largura: 30 },
+      ],
+      linhas: extratos.map((t) => [t.importacao.conta.nome, iso(t.data), t.descricao, t.valorCentavos, t.status.toLowerCase(), t.partidaId, t.fitid, t.importacao.arquivo]),
+    },
+    {
+      aba: "WhatsApp",
+      titulo: "Documentos recebidos pelo WhatsApp",
+      colunas: [
+        { titulo: "Recebido em", tipo: "data", largura: 12 },
+        { titulo: "Remetente", tipo: "texto", largura: 16 },
+        { titulo: "Arquivo", tipo: "texto", largura: 30 },
+        { titulo: "Legenda", tipo: "texto", largura: 30 },
+        { titulo: "Situação", tipo: "texto", largura: 11 },
+        { titulo: "Erro de leitura", tipo: "texto", largura: 40 },
+      ],
+      linhas: recebidos.map((d) => [iso(d.criadoEm), d.remetente, d.anexo?.nome ?? null, d.legenda, d.status.toLowerCase(), d.erro]),
     },
     {
       aba: "Parâmetros",

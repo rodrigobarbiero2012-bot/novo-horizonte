@@ -1,10 +1,12 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { chaveDuplicata, lerPlanilhaLancamentos, LIMITE_LINHAS, type LinhaImportada } from "@/lib/importacao/lancamentosExcel";
 import { exigirUsuario } from "@/lib/usuario";
+import { ehDataIso } from "@/lib/validacao";
 
 export type LinhaPrevia = LinhaImportada & { duplicada: boolean };
 export type ResultadoAnalise = { ok: true; arquivo: string; linhas: LinhaPrevia[] } | { ok: false; erro: string };
@@ -40,22 +42,7 @@ export async function analisarPlanilha(form: FormData): Promise<ResultadoAnalise
   if (lido.erro && !lido.linhas.length) return { ok: false, erro: lido.erro };
   if (lido.erro) return { ok: false, erro: lido.erro };
 
-  // Duplicados: lançamentos de duas pernas já gravados com mesma data, valor, contas e histórico.
-  const datas = lido.linhas.filter((l) => l.data).map((l) => l.data).sort();
-  const existentes = new Set<string>();
-  if (datas.length) {
-    const lancs = await prisma.lancamento.findMany({
-      where: { data: { gte: new Date(datas[0]), lte: new Date(datas.at(-1)!) } },
-      select: { data: true, historico: true, partidas: { select: { contaId: true, valorCentavos: true } } },
-    });
-    for (const l of lancs) {
-      if (l.partidas.length !== 2) continue;
-      const deb = l.partidas.find((p) => p.valorCentavos > 0);
-      const cred = l.partidas.find((p) => p.valorCentavos < 0);
-      if (!deb || !cred) continue;
-      existentes.add(chaveDuplicata({ data: l.data.toISOString().slice(0, 10), valorCentavos: deb.valorCentavos, debitoId: deb.contaId, creditoId: cred.contaId, historico: l.historico ?? "" }));
-    }
-  }
+  const existentes = await chavesExistentes(lido.linhas.map((l) => l.data));
   const vistas = new Set<string>();
   const linhas = lido.linhas.map((l) => {
     const chave = chaveDuplicata(l);
@@ -66,18 +53,37 @@ export async function analisarPlanilha(form: FormData): Promise<ResultadoAnalise
   return { ok: true, arquivo: arquivo.name, linhas };
 }
 
+/** Chaves (data, valor, contas, histórico) dos lançamentos de duas pernas já gravados no período das datas. */
+async function chavesExistentes(datas: string[]): Promise<Set<string>> {
+  const validas = datas.filter(Boolean).sort();
+  const existentes = new Set<string>();
+  if (!validas.length) return existentes;
+  const lancs = await prisma.lancamento.findMany({
+    where: { data: { gte: new Date(validas[0]), lte: new Date(validas.at(-1)!) } },
+    select: { data: true, historico: true, partidas: { select: { contaId: true, valorCentavos: true } } },
+  });
+  for (const l of lancs) {
+    if (l.partidas.length !== 2) continue;
+    const deb = l.partidas.find((p) => p.valorCentavos > 0);
+    const cred = l.partidas.find((p) => p.valorCentavos < 0);
+    if (!deb || !cred) continue;
+    existentes.add(chaveDuplicata({ data: l.data.toISOString().slice(0, 10), valorCentavos: deb.valorCentavos, debitoId: deb.contaId, creditoId: cred.contaId, historico: l.historico ?? "" }));
+  }
+  return existentes;
+}
+
 export type ResultadoImportacao = { ok: true; criados: number } | { ok: false; erro: string };
 
 /** Grava as linhas válidas escolhidas na prévia. Revalida tudo no servidor. */
-export async function importarLancamentos(arquivo: string, linhas: LinhaImportada[]): Promise<ResultadoImportacao> {
+export async function importarLancamentos(arquivo: string, linhas: LinhaImportada[], permitirDuplicadas = false): Promise<ResultadoImportacao> {
   const usuario = await exigirUsuario();
+  if (typeof arquivo !== "string") return { ok: false, erro: "Arquivo inválido." };
   if (!Array.isArray(linhas) || !linhas.length) return { ok: false, erro: "Nada para importar." };
   if (linhas.length > LIMITE_LINHAS) return { ok: false, erro: `No máximo ${LIMITE_LINHAS} lançamentos por vez.` };
   const ativas = new Set((await prisma.conta.findMany({ where: { ativa: true }, select: { id: true } })).map((c) => c.id));
   const validas = linhas.filter(
     (l) =>
-      /^\d{4}-\d{2}-\d{2}$/.test(l.data) &&
-      !Number.isNaN(Date.parse(l.data)) &&
+      ehDataIso(l.data) &&
       typeof l.historico === "string" &&
       l.historico.trim() &&
       l.debitoId &&
@@ -90,29 +96,33 @@ export async function importarLancamentos(arquivo: string, linhas: LinhaImportad
   );
   if (validas.length !== linhas.length) return { ok: false, erro: "Há linhas inválidas na seleção. Analise a planilha de novo." };
 
-  // Em lotes, para não estourar o tempo de uma transação só no banco.
-  const LOTE = 200;
-  for (let i = 0; i < validas.length; i += LOTE) {
-    await prisma.$transaction(
-      validas.slice(i, i + LOTE).map((l) =>
-        prisma.lancamento.create({
-          data: {
-            data: new Date(l.data),
-            historico: l.historico.trim(),
-            origem: "IMPORTACAO",
-            criadoPorId: usuario.id,
-            atualizadoPorId: usuario.id,
-            partidas: {
-              create: [
-                { contaId: l.debitoId!, valorCentavos: l.valorCentavos, data: new Date(l.data) },
-                { contaId: l.creditoId!, valorCentavos: -l.valorCentavos, data: new Date(l.data) },
-              ],
-            },
-          },
-        }),
-      ),
-    );
+  // Repetidos conferidos de novo aqui (não só na prévia): evita importar o mesmo arquivo duas vezes.
+  if (!permitirDuplicadas) {
+    const existentes = await chavesExistentes(validas.map((l) => l.data));
+    const repetidas = validas.filter((l) => existentes.has(chaveDuplicata(l)));
+    if (repetidas.length) return { ok: false, erro: `${repetidas.length} lançamento(s) já existem no sistema (ex.: linha ${repetidas[0].linha}). Analise a planilha de novo.` };
   }
+
+  // Tudo numa transação só, com ids gerados aqui: duas instruções no banco, e nada fica pela metade.
+  const lancamentos = validas.map((l) => ({ ...l, id: randomUUID(), quando: new Date(l.data) }));
+  await prisma.$transaction([
+    prisma.lancamento.createMany({
+      data: lancamentos.map((l) => ({
+        id: l.id,
+        data: l.quando,
+        historico: l.historico.trim(),
+        origem: "IMPORTACAO",
+        criadoPorId: usuario.id,
+        atualizadoPorId: usuario.id,
+      })),
+    }),
+    prisma.partida.createMany({
+      data: lancamentos.flatMap((l) => [
+        { lancamentoId: l.id, contaId: l.debitoId!, valorCentavos: l.valorCentavos, data: l.quando },
+        { lancamentoId: l.id, contaId: l.creditoId!, valorCentavos: -l.valorCentavos, data: l.quando },
+      ]),
+    }),
+  ]);
   await prisma.registroAuditoria.create({
     data: {
       usuarioId: usuario.id,

@@ -37,7 +37,7 @@ export type Total = (typeof TOTAIS)[number];
 /** Subtotais da DRE, mês a mês (mesma composição de dreAnual). */
 export function totaisMensais(m: Matriz): Record<Total, number[]> {
   const mes = (f: (i: number) => number) => Array.from({ length: 12 }, (_, i) => f(i));
-  const totalReceita = mes((i) => m.receitaCafe[i] + m.receitaMaracuja[i] + m.receitaPecuaria[i] + m.outrasReceitas[i]);
+  const totalReceita = mes((i) => m.receitaCafe[i] + m.receitaMaracuja[i] + m.receitaMilho[i] + m.receitaPecuaria[i] + m.outrasReceitas[i]);
   const totalCusteio = mes((i) => m.custeioCafe[i] + m.custeioMaracuja[i] + m.custeioMilho[i] + m.custeioPecuaria[i] + m.custeioGeral[i]);
   const margemContribuicao = mes((i) => totalReceita[i] + totalCusteio[i]);
   const totalDespesas = mes((i) => m.despesasAdministrativas[i] + m.despesasFinanceiras[i]);

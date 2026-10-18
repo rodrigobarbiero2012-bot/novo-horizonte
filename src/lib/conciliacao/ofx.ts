@@ -1,3 +1,4 @@
+import { ehDataIso } from "../validacao";
 // Leitor de OFX (Open Financial Exchange), nas duas variantes que os bancos
 // brasileiros exportam: OFX 1.x em SGML (tags sem fechamento) e OFX 2.x em
 // XML. Só lê o que a conciliação usa: transações e saldo final.
@@ -33,10 +34,11 @@ function tag(bloco: string, nome: string): string | null {
   return v ? v.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">") : null;
 }
 
-/** "20261015120000[-3:BRT]" → "2026-10-15" */
+/** "20261015120000[-3:BRT]" → "2026-10-15"; data impossível (ex.: mês 13) → null. */
 function dataOfx(v: string | null): string | null {
   const m = v?.match(/^(\d{4})(\d{2})(\d{2})/);
-  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  const iso = m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  return ehDataIso(iso) ? iso : null;
 }
 
 /** "-548.00", "-548,00", "1.234,56" → centavos */

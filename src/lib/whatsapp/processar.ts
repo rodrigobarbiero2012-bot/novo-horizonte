@@ -34,10 +34,16 @@ export function enderecoSite(): string {
   return (host || "http://localhost:3000").replace(/\/$/, "");
 }
 
+/** Hosts da Meta que podem receber o token (API e download de mídia). */
+const hostDaMeta = (host: string) => host === "graph.facebook.com" || host === "lookaside.fbsbx.com" || host.endsWith(".fbsbx.com");
+
 async function graph(caminho: string, init?: RequestInit) {
-  return fetch(caminho.startsWith("http") ? caminho : `${API}/${caminho}`, {
+  const url = new URL(caminho.startsWith("http") ? caminho : `${API}/${caminho}`);
+  if (url.protocol !== "https:" || !hostDaMeta(url.hostname)) throw new Error(`WhatsApp: endereço fora da Meta recusado (${url.hostname})`);
+  return fetch(url, {
     ...init,
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, ...init?.headers },
+    signal: AbortSignal.timeout(20_000),
   });
 }
 

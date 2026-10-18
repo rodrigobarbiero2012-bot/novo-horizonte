@@ -2,6 +2,9 @@ import { after } from "next/server";
 import { assinaturaValida, lerNotificacao } from "@/lib/whatsapp/meta";
 import { processarMensagem } from "@/lib/whatsapp/processar";
 
+// A leitura do documento (Claude) roda depois da resposta, via after(), dentro deste limite.
+export const maxDuration = 60;
+
 // Webhook do WhatsApp (Cloud API da Meta). Fora do login (ver proxy.ts): a
 // autenticação é o verify token no cadastro (GET) e a assinatura HMAC em cada
 // notificação (POST).

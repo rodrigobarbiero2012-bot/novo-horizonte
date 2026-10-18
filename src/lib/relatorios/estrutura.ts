@@ -12,6 +12,7 @@ export const LINHAS_DRE_TELA: LinhaDreTela[] = [
   { tipo: "secao", rotulo: "Receita operacional" },
   { tipo: "valor", rotulo: "Café", chave: "receitaCafe" },
   { tipo: "valor", rotulo: "Maracujá", chave: "receitaMaracuja" },
+  { tipo: "valor", rotulo: "Milho", chave: "receitaMilho" },
   { tipo: "valor", rotulo: "Pecuária", chave: "receitaPecuaria" },
   { tipo: "valor", rotulo: "Outras (diversas/financeiras)", chave: "outrasReceitas" },
   { tipo: "total", rotulo: "Total receita", chave: "totalReceita" },

@@ -15,8 +15,10 @@ function chave() {
   return new TextEncoder().encode(segredo);
 }
 
-export async function assinarSessao(usuarioId: string): Promise<string> {
-  return new SignJWT({})
+export type Sessao = { usuarioId: string; versao: number };
+
+export async function assinarSessao(usuarioId: string, versao: number): Promise<string> {
+  return new SignJWT({ v: versao })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(usuarioId)
     .setIssuedAt()
@@ -24,12 +26,16 @@ export async function assinarSessao(usuarioId: string): Promise<string> {
     .sign(chave());
 }
 
-/** Id do usuário se o token for válido e não expirado; senão null. */
-export async function verificarSessao(token: string | undefined): Promise<string | null> {
+/**
+ * Sessão do token, se for válido e não expirado; senão null. A versão é
+ * conferida contra o banco em exigirUsuario() (o proxy só confere a assinatura).
+ */
+export async function verificarSessao(token: string | undefined): Promise<Sessao | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, chave(), { algorithms: ["HS256"] });
-    return payload.sub ?? null;
+    if (!payload.sub) return null;
+    return { usuarioId: payload.sub, versao: typeof payload.v === "number" ? payload.v : 0 };
   } catch {
     return null;
   }

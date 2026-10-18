@@ -19,6 +19,7 @@ import {
   type Total,
 } from "@/lib/orcamento/calculo";
 import { exigirUsuario } from "@/lib/usuario";
+import { hojeSP } from "@/lib/hoje";
 
 export const metadata: Metadata = { title: "Orçamento × realizado" };
 
@@ -28,6 +29,7 @@ const GRUPOS: (GrupoEditor & { total: { chave: Total; rotulo: string } | null })
     linhas: [
       { chave: "receitaCafe", rotulo: "Café" },
       { chave: "receitaMaracuja", rotulo: "Maracujá" },
+      { chave: "receitaMilho", rotulo: "Milho" },
       { chave: "receitaPecuaria", rotulo: "Pecuária" },
       { chave: "outrasReceitas", rotulo: "Outras (diversas/financeiras)" },
     ],
@@ -55,7 +57,7 @@ const GRUPOS: (GrupoEditor & { total: { chave: Total; rotulo: string } | null })
   { rotulo: "Não operacional", linhas: [{ chave: "resultadoNaoOperacional", rotulo: "Venda/baixa de imobilizado" }], total: null },
 ];
 
-const hojeIso = () => new Date().toLocaleDateString("sv-SE");
+const hojeIso = () => hojeSP();
 
 const pct = (v: number | null) => (v === null ? "–" : v.toLocaleString("pt-BR", { style: "percent", maximumFractionDigits: 0 }));
 

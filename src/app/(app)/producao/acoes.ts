@@ -5,17 +5,12 @@ import { prisma } from "@/lib/db";
 import { lerValorBr } from "@/lib/contabil/lancamento";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type TipoMovimento } from "@/lib/producao/atividades";
 import { exigirUsuario } from "@/lib/usuario";
+import { ehDataIso, ehId, lerNumeroBr } from "@/lib/validacao";
 
 export type EstadoProducao = { erro?: string; ok?: string } | undefined;
 
-/** "1.234,5" / "1234.5" / "-3" → número; null se vazio ou inválido. */
-function numero(texto: FormDataEntryValue | null): number | null {
-  const t = String(texto ?? "").trim();
-  if (!t) return null;
-  const normal = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
-  const n = Number(normal);
-  return Number.isFinite(n) ? n : null;
-}
+/** Quantidade digitada: "1.500" = mil e quinhentos, "1.234,5", "12,5". null se vazio ou inválido. */
+const numero = (texto: FormDataEntryValue | null) => lerNumeroBr(texto);
 
 const revalidar = (slug: string) => {
   revalidatePath(`/producao/${slug}`);
@@ -53,6 +48,7 @@ export async function criarTalhao(slug: string, _: EstadoProducao, form: FormDat
 
 export async function alternarTalhao(slug: string, id: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return;
   const t = await prisma.talhao.findUnique({ where: { id } });
   if (!t) return;
   await prisma.talhao.update({ where: { id }, data: { ativo: !t.ativo } });
@@ -70,7 +66,7 @@ export async function registrarMovimento(slug: string, _: EstadoProducao, form: 
   const valor = lerValorBr(String(form.get("valor") ?? ""));
   const talhaoId = String(form.get("talhaoId") ?? "") || null;
   if (!def.tipos.some((t) => t.tipo === tipo)) return { erro: "Escolha o tipo." };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return { erro: "Data inválida." };
+  if (!ehDataIso(data)) return { erro: "Data inválida." };
   if (quantidade === null || quantidade === 0 || (tipo !== "AJUSTE" && quantidade < 0)) {
     return { erro: tipo === "AJUSTE" ? "Informe a diferença (positiva ou negativa)." : "Informe a quantidade." };
   }
@@ -96,6 +92,7 @@ export async function registrarMovimento(slug: string, _: EstadoProducao, form: 
 
 export async function excluirMovimento(slug: string, id: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return;
   const m = await prisma.movimentoProducao.findUnique({ where: { id } });
   if (!m) return;
   await prisma.movimentoProducao.delete({ where: { id } });

@@ -8,10 +8,11 @@ import { lerValorBr } from "@/lib/contabil/lancamento";
 import { CATEGORIAS_BAIXA, categoriasDoTitulo } from "@/lib/titulos/categorias";
 import { gerarParcelas, partidasDaBaixa, type TipoTitulo } from "@/lib/titulos/regras";
 import { exigirUsuario } from "@/lib/usuario";
+import { ehDataIso, ehId } from "@/lib/validacao";
 
 export type EstadoTitulo = { erro?: string; ok?: string } | undefined;
 
-const dataValida = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+const dataValida = ehDataIso;
 const revalidar = () => {
   revalidatePath("/a-pagar-receber");
   revalidatePath("/");
@@ -74,6 +75,7 @@ export async function criarTitulo(_: EstadoTitulo, form: FormData): Promise<Esta
 /** Paga ou recebe o título: gera o lançamento e liga os dois. */
 export async function baixarTitulo(id: string, _: EstadoTitulo, form: FormData): Promise<EstadoTitulo> {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return { erro: "Registro inválido." };
   const data = String(form.get("data") ?? "");
   const contaBaixaId = String(form.get("contaBaixaId") ?? "");
   const valor = lerValorBr(String(form.get("valor") ?? ""));
@@ -83,8 +85,11 @@ export async function baixarTitulo(id: string, _: EstadoTitulo, form: FormData):
   if (!contaBaixa || !CATEGORIAS_BAIXA.includes(contaBaixa.categoria)) return { erro: "Escolha de onde sai (ou entra) o dinheiro." };
 
   const erro = await prisma.$transaction(async (tx) => {
-    const t = await tx.titulo.findUnique({ where: { id } });
-    if (!t || t.status !== "ABERTO") return "Este título não está em aberto.";
+    // Reserva o título antes de criar o lançamento: com dois cliques (ou os dois sócios ao mesmo
+    // tempo) só um pedido muda ABERTO → BAIXADO; o outro recebe a mensagem e não gera lançamento.
+    const { count } = await tx.titulo.updateMany({ where: { id, status: "ABERTO" }, data: { status: "BAIXADO" } });
+    if (count !== 1) return "Este título não está em aberto.";
+    const t = await tx.titulo.findUniqueOrThrow({ where: { id } });
     const tipo = t.tipo as TipoTitulo;
     const parcela = t.parcela ? ` (${t.parcela}/${t.totalParcelas})` : "";
     const quando = new Date(data);
@@ -100,7 +105,7 @@ export async function baixarTitulo(id: string, _: EstadoTitulo, form: FormData):
     });
     await tx.titulo.update({
       where: { id },
-      data: { status: "BAIXADO", baixadoEm: quando, valorBaixaCentavos: valor, contaBaixaId, lancamentoId: lancamento.id },
+      data: { baixadoEm: quando, valorBaixaCentavos: valor, contaBaixaId, lancamentoId: lancamento.id },
     });
     await tx.registroAuditoria.create({
       data: { usuarioId: usuario.id, entidade: "Titulo", entidadeId: id, acao: "BAIXAR", depois: { data, valorCentavos: valor, conta: contaBaixa.nome, lancamentoId: lancamento.id } },
@@ -116,6 +121,7 @@ export async function baixarTitulo(id: string, _: EstadoTitulo, form: FormData):
 /** Desfaz a baixa: apaga o lançamento gerado e reabre o título. */
 export async function estornarBaixa(id: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return;
   await prisma.$transaction(async (tx) => {
     const t = await tx.titulo.findUnique({ where: { id } });
     if (!t || t.status !== "BAIXADO") return;
@@ -139,22 +145,27 @@ export async function estornarBaixa(id: string) {
 /** Exclui um título em aberto (lançado por engano). Títulos baixados precisam do estorno antes. */
 export async function excluirTitulo(id: string) {
   const usuario = await exigirUsuario();
-  const t = await prisma.titulo.findUnique({ where: { id } });
-  if (!t || t.status !== "ABERTO") return;
-  // Parcela com o arquivo do documento: o arquivo passa para outra parcela do mesmo parcelamento.
-  const outra = t.grupoParcelasId
-    ? await prisma.titulo.findFirst({ where: { grupoParcelasId: t.grupoParcelasId, id: { not: id } }, orderBy: { vencimento: "asc" }, select: { id: true } })
-    : null;
-  if (outra) await prisma.anexo.updateMany({ where: { tituloId: id }, data: { tituloId: outra.id } });
-  await prisma.titulo.delete({ where: { id } });
-  await prisma.registroAuditoria.create({
-    data: {
-      usuarioId: usuario.id,
-      entidade: "Titulo",
-      entidadeId: id,
-      acao: "EXCLUIR",
-      antes: { descricao: t.descricao, valorCentavos: t.valorCentavos, vencimento: t.vencimento.toISOString().slice(0, 10) },
-    },
+  if (!ehId(id)) return;
+  await prisma.$transaction(async (tx) => {
+    const t = await tx.titulo.findUnique({ where: { id } });
+    if (!t || t.status !== "ABERTO") return;
+    // Parcela com o arquivo do documento: o arquivo passa para outra parcela do mesmo parcelamento.
+    const outra = t.grupoParcelasId
+      ? await tx.titulo.findFirst({ where: { grupoParcelasId: t.grupoParcelasId, id: { not: id } }, orderBy: { vencimento: "asc" }, select: { id: true } })
+      : null;
+    if (outra) await tx.anexo.updateMany({ where: { tituloId: id }, data: { tituloId: outra.id } });
+    // Só apaga se ainda estiver em aberto (pode ter sido baixado por outro pedido nesse meio tempo).
+    const { count } = await tx.titulo.deleteMany({ where: { id, status: "ABERTO" } });
+    if (count !== 1) throw new Error("Título deixou de estar em aberto.");
+    await tx.registroAuditoria.create({
+      data: {
+        usuarioId: usuario.id,
+        entidade: "Titulo",
+        entidadeId: id,
+        acao: "EXCLUIR",
+        antes: { descricao: t.descricao, valorCentavos: t.valorCentavos, vencimento: t.vencimento.toISOString().slice(0, 10) },
+      },
+    });
   });
   revalidar();
 }

@@ -4,6 +4,8 @@
 export type PontoCotacao = { data: string; valor: number }; // data ISO yyyy-mm-dd
 
 const AGENTE = "Mozilla/5.0 (compatible; NovoHorizonte/1.0; gestao de sitio)";
+/** Uma fonte travada não pode segurar o cron inteiro até a Vercel matar a função. */
+const LIMITE_MS = 15_000;
 
 /** "1.601,25" → 1601.25 */
 const numeroBr = (s: string) => Number(s.trim().replace(/\./g, "").replace(",", "."));
@@ -34,7 +36,7 @@ export function lerTabelaCepea(html: string): PontoCotacao[] {
 }
 
 export async function buscarCepea(url: string): Promise<PontoCotacao[]> {
-  const resposta = await fetch(url, { headers: { "user-agent": AGENTE }, cache: "no-store" });
+  const resposta = await fetch(url, { headers: { "user-agent": AGENTE }, cache: "no-store", signal: AbortSignal.timeout(LIMITE_MS) });
   if (!resposta.ok) throw new Error(`CEPEA: HTTP ${resposta.status}`);
   return lerTabelaCepea(await resposta.text());
 }
@@ -63,7 +65,7 @@ export function lerIndicadorVaca(html: string, estado = "São Paulo"): PontoCota
 }
 
 export async function buscarVacaGorda(url: string): Promise<PontoCotacao[]> {
-  const resposta = await fetch(url, { headers: { "user-agent": AGENTE }, cache: "no-store" });
+  const resposta = await fetch(url, { headers: { "user-agent": AGENTE }, cache: "no-store", signal: AbortSignal.timeout(LIMITE_MS) });
   if (!resposta.ok) throw new Error(`Notícias Agrícolas: HTTP ${resposta.status}`);
   return lerIndicadorVaca(await resposta.text());
 }
@@ -82,7 +84,7 @@ export async function buscarDolarPtax(hoje = new Date()): Promise<PontoCotacao[]
     "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/" +
     "CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)" +
     `?@dataInicial='${fmt(inicio)}'&@dataFinalCotacao='${fmt(hoje)}'&$format=json&$select=cotacaoVenda,dataHoraCotacao`;
-  const resposta = await fetch(url, { cache: "no-store" });
+  const resposta = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(LIMITE_MS) });
   if (!resposta.ok) throw new Error(`Banco Central: HTTP ${resposta.status}`);
   return lerPtax(await resposta.json());
 }

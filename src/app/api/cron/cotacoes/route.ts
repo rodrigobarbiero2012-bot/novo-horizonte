@@ -1,5 +1,8 @@
 import { atualizarCotacoes } from "@/lib/cotacoes/atualizar";
 
+// Várias fontes externas, cada uma com limite de 15 s.
+export const maxDuration = 60;
+
 // Chamado uma vez por dia pelo Cron da Vercel (vercel.json). A Vercel envia
 // "Authorization: Bearer <CRON_SECRET>"; sem o segredo certo a rota recusa.
 export async function GET(request: Request) {

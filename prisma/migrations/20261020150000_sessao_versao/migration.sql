@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Usuario" ADD COLUMN     "sessaoVersao" INTEGER NOT NULL DEFAULT 0;
+

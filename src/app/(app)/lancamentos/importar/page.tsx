@@ -4,6 +4,9 @@ import { Pagina } from "@/components/Pagina";
 import { Cabecalho } from "@/components/ui";
 import { exigirUsuario } from "@/lib/usuario";
 
+// Importação de até 2.000 lançamentos.
+export const maxDuration = 60;
+
 export const metadata: Metadata = { title: "Importar planilha" };
 
 async function Conteudo() {

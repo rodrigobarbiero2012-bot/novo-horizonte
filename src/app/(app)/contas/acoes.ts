@@ -17,6 +17,10 @@ export async function criarConta(_: EstadoConta, form: FormData): Promise<Estado
   if (!nome) return { erro: "Informe o nome da conta." };
   if (!ehCategoria(categoria)) return { erro: "Escolha a categoria." };
   if (!ehAtividade(atividade)) return { erro: "Escolha a atividade." };
+  // Combinações que não têm linha na DRE: a conta ficaria fora do resultado e o balanço não fecharia.
+  if ((categoria === "Receita" || categoria === "Custeio") && atividade === "N/A") {
+    return { erro: `${categoria} precisa de atividade: Café, Maracujá, Milho, Pecuária ou Geral (comum a todas).` };
+  }
   if (await prisma.conta.findUnique({ where: { nome } })) return { erro: `Já existe uma conta "${nome}".` };
 
   const conta = await prisma.conta.create({

@@ -15,7 +15,13 @@ import { numerosAutorizados } from "@/lib/whatsapp/processar";
 import { criarLancamento } from "../acoes";
 import { lerDocumentoAcao, type ResultadoLeitura } from "./acoes";
 
+// A ação de leitura do documento roda nesta função e leva de 10 a 30 s.
+export const maxDuration = 60;
+
 export const metadata: Metadata = { title: "Ler boleto ou nota" };
+
+/** Sem leitura nem erro depois de 3 minutos: a função caiu no meio (a leitura leva no máximo ~45 s). */
+const leituraTravada = (recebidoEm: Date) => Date.now() - recebidoEm.getTime() > 3 * 60_000;
 
 /** Documento que a IA não conseguiu ler: abre a revisão em branco, para preencher à mão. */
 const documentoVazio = (erro: string): DocumentoLido => ({
@@ -101,7 +107,11 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos/ler">) {
                     <span className="block truncate text-xs text-stone-500">
                       de {nomeDe(r.remetente)}
                       {r.legenda ? ` — “${r.legenda}”` : ""}
-                      {r.erro ? <span className="text-amber-700"> · não lido: {r.erro}</span> : null}
+                      {r.erro ? (
+                        <span className="text-amber-700"> · não lido: {r.erro}</span>
+                      ) : !r.leitura && leituraTravada(r.criadoEm) ? (
+                        <span className="text-amber-700"> · leitura não concluída — confira à mão</span>
+                      ) : null}
                     </span>
                   </span>
                   <Link href={`/lancamentos/ler?documento=${r.id}`} className="rounded-md border border-folha-600 px-2.5 py-1 text-xs font-medium text-folha-700 hover:bg-folha-50">

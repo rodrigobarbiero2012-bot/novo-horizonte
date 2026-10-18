@@ -46,6 +46,8 @@ const ROTULOS_BALANCO: Record<string, keyof BalancoAno> = {
  * sistema arredonda cada linha para centavos, então a tolerância é de 1 centavo
  * por linha do relatório.
  */
+const LINHAS_SO_NO_SISTEMA = new Set(["Receita Milho"]);
+
 export function conferir(partidas: PartidaContabil[], ref: Referencia, toleranciaCentavos = 1): {
   anos: number[];
   comparacoes: number;
@@ -67,7 +69,8 @@ export function conferir(partidas: PartidaContabil[], ref: Referencia, toleranci
     calculado: Map<number, T>,
   ) => {
     for (const [rotulo, chave] of Object.entries(rotulos)) {
-      const valores = tabela[rotulo];
+      // Linhas criadas depois da planilha (ex.: Receita Milho) não existem nela: valem zero em todo o histórico.
+      const valores = tabela[rotulo] ?? (LINHAS_SO_NO_SISTEMA.has(rotulo) ? Object.fromEntries(anos.map((a) => [String(a), 0])) : undefined);
       if (!valores) throw new Error(`${relatorio}: linha "${rotulo}" não encontrada na referência`);
       for (const a of anos) {
         const planilha = valores[String(a)];

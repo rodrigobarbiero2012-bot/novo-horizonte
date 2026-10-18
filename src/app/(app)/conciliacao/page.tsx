@@ -15,15 +15,26 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 async function Conteudo({ searchParams }: PageProps<"/conciliacao">) {
   await exigirUsuario();
-  const contas = await contasAtivas();
+  const [contas, ultimaImportacao, { conta: pedida }] = await Promise.all([
+    contasAtivas(),
+    prisma.importacaoExtrato.findFirst({ orderBy: { criadoEm: "desc" }, select: { contaId: true } }),
+    searchParams,
+  ]);
   const conciliaveis = contas.filter((c) => CATEGORIAS_BAIXA.includes(c.categoria));
-  const pedida = (await searchParams).conta;
   // Sem escolha: a última conta que teve extrato importado; senão, a primeira conta bancária.
-  const ultimaImportacao = await prisma.importacaoExtrato.findFirst({ orderBy: { criadoEm: "desc" }, select: { contaId: true } });
   const conta =
     conciliaveis.find((c) => c.id === pedida) ??
     conciliaveis.find((c) => c.id === ultimaImportacao?.contaId) ??
-    conciliaveis.find((c) => c.categoria === "Ativo Caixa/Banco")!;
+    conciliaveis.find((c) => c.categoria === "Ativo Caixa/Banco") ??
+    conciliaveis[0];
+  if (!conta) {
+    return (
+      <>
+        <Cabecalho titulo="Conciliação bancária" />
+        <p className="text-sm text-stone-600">Nenhuma conta bancária ativa no plano de contas.</p>
+      </>
+    );
+  }
   const ehSocio = conta.categoria === "PL Capital Sócio";
 
   const [importacoes, pendentes, tratadas] = await Promise.all([

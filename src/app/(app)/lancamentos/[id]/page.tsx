@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { FormularioLancamento, type LinhaForm } from "@/components/FormularioLancamento";
@@ -74,6 +75,15 @@ async function Conteudo({ params }: PageProps<"/lancamentos/[id]">) {
       <Cabecalho titulo="Lançamento" subtitulo={`${origem} · ${lancamento.partidas.length} linhas`}>
         <BotaoExcluir acao={excluirLancamento.bind(null, id)} />
       </Cabecalho>
+      {lancamento.titulo && (
+        <p className="mb-4 max-w-6xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Gerado pela baixa da conta “{lancamento.titulo.descricao}”. Para alterar valor, data ou conta, desfaça a baixa em{" "}
+          <Link href="/a-pagar-receber" className="underline">
+            A pagar e receber
+          </Link>{" "}
+          e registre de novo.
+        </p>
+      )}
       <Cartao className="max-w-6xl p-5">
         <FormularioLancamento
           contas={contas}

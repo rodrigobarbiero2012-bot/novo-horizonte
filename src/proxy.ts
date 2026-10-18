@@ -13,5 +13,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|primeiro-acesso|api/cron|api/whatsapp|_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|icons/).*)"],
+  // Cada exceção é ancorada (fim do caminho ou "/"), para uma rota futura como
+  // "/login-x" ou "/api/cron-y" não escapar do filtro por prefixo.
+  matcher: [
+    "/((?!(?:login|primeiro-acesso|api/whatsapp|favicon\\.ico|icon\\.svg|manifest\\.webmanifest)(?:/|$)|api/cron/|_next/static/|_next/image|icons/).*)",
+  ],
 };

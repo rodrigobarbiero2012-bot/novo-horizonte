@@ -91,6 +91,7 @@ export function ImportadorPlanilha() {
       const r = await importarLancamentos(
         estado.arquivo,
         aImportar.map((l) => ({ ...l, duplicada: undefined })),
+        incluirDuplicadas,
       );
       setEstado(r.ok ? { etapa: "feito", criados: r.criados } : { ...estado, erro: r.erro });
     });

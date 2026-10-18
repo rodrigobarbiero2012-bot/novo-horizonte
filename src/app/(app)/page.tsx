@@ -14,6 +14,7 @@ import { prisma } from "@/lib/db";
 import { dataBr, MESES, percentual, reais, reaisCurto } from "@/lib/formato";
 import { ehLinhaOrcamento, matrizVazia, mesDeCorte, realizadoMensal, somaAte, totaisMensais, type Matriz } from "@/lib/orcamento/calculo";
 import { exigirUsuario } from "@/lib/usuario";
+import { anoSP, hojeSP, somarDias } from "@/lib/hoje";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
@@ -29,12 +30,12 @@ async function Conteudo() {
     }),
     prisma.usuario.findMany({ where: { senhaHash: null }, select: { nome: true } }),
     prisma.titulo.findMany({
-      where: { status: "ABERTO", tipo: "PAGAR", vencimento: { lte: new Date(Date.parse(new Date().toLocaleDateString("sv-SE")) + 7 * 86_400_000) } },
+      where: { status: "ABERTO", tipo: "PAGAR", vencimento: { lte: new Date(somarDias(hojeSP(), 7)) } },
       select: { valorCentavos: true, vencimento: true },
     }),
     prisma.talhao.groupBy({ by: ["atividade"] }),
     prisma.movimentoProducao.groupBy({ by: ["atividade"] }),
-    prisma.orcamentoItem.findMany({ where: { ano: new Date().getFullYear() } }),
+    prisma.orcamentoItem.findMany({ where: { ano: anoSP() } }),
     taxasDepreciacao(),
     prisma.documentoRecebido.count({ where: { status: "PENDENTE" } }),
     prisma.registroAuditoria.findFirst({ where: { entidade: "Backup" }, orderBy: { em: "desc" }, select: { em: true } }),
@@ -44,9 +45,9 @@ async function Conteudo() {
   const producaoPendente = Object.entries(ATIVIDADES_PRODUCAO).filter(([, def]) => !comDados.has(def.chave));
 
   // Período: do início do ano até o último lançamento, contra o mesmo período do ano anterior.
-  const hoje = new Date().toLocaleDateString("sv-SE");
+  const hoje = hojeSP();
   // Backup em planilha: lembrar quando o último tiver mais de 30 dias (ou nunca foi feito).
-  const diasDesdeBackup = ultimoBackup ? Math.round((Date.parse(hoje) - Date.parse(ultimoBackup.em.toLocaleDateString("sv-SE"))) / 86_400_000) : null;
+  const diasDesdeBackup = ultimoBackup ? Math.round((Date.parse(hoje) - Date.parse(hojeSP(ultimoBackup.em))) / 86_400_000) : null;
   const ano = anos.at(-1)!;
   const ultimaData = partidas.reduce((m, p) => (p.data > m ? p.data : m), "");
   const fim = ultimaData.startsWith(String(ano)) ? ultimaData : `${ano}-01-01`;

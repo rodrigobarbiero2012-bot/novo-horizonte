@@ -29,7 +29,8 @@ export async function lerDocumento(arquivo: { dados: Buffer; tipo: TipoAceito },
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new LeituraIndisponivel("A leitura por IA ainda não foi configurada (falta ANTHROPIC_API_KEY).");
   }
-  const client = new Anthropic();
+  // Abaixo do limite das funções (maxDuration 60 s): uma falha volta como mensagem, não como página quebrada.
+  const client = new Anthropic({ timeout: 45_000, maxRetries: 1 });
   const base64 = arquivo.dados.toString("base64");
   const anexo: Anthropic.Beta.BetaContentBlockParam =
     arquivo.tipo === "application/pdf"

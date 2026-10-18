@@ -92,7 +92,10 @@ export function relatorioOrcamento(ano: number, ate: number, orcado: Matriz, rea
   const totReal = totaisMensais(realizado);
   const linha = (rotulo: string, o: number[], r: number[], e: EstiloLinha = "valor") => {
     const c = comparar(somaAte(o, ate), somaAte(r, ate));
-    return { rotulo, estilo: e, valores: [somaAte(o, 12), c.orcado, c.realizado, c.desvio, c.pct, somaAte(o, 12) === 0 ? null : c.realizado / somaAte(o, 12)] };
+    const anual = somaAte(o, 12);
+    // Mesma regra da tela: sem percentual quando orçado e realizado têm sinais opostos (ex.: lucro × prejuízo).
+    const executado = anual === 0 || c.realizado * anual < 0 ? null : c.realizado / anual;
+    return { rotulo, estilo: e, valores: [anual, c.orcado, c.realizado, c.desvio, c.pct, executado] };
   };
   const total = (rotulo: string, chave: Total, e: EstiloLinha = "total") => linha(rotulo, totOrc[chave], totReal[chave], e);
   const valor = (l: LinhaDre) => linha(ROTULOS_ORCAMENTO[l], orcado[l], realizado[l]);
@@ -105,7 +108,7 @@ export function relatorioOrcamento(ano: number, ate: number, orcado: Matriz, rea
     colunasPct: [4, 5],
     linhas: [
       secao("Receita operacional"),
-      ...(["receitaCafe", "receitaMaracuja", "receitaPecuaria", "outrasReceitas"] as const).map(valor),
+      ...(["receitaCafe", "receitaMaracuja", "receitaMilho", "receitaPecuaria", "outrasReceitas"] as const).map(valor),
       total("Total receita", "totalReceita"),
       secao("Custeio"),
       ...(["custeioCafe", "custeioMaracuja", "custeioMilho", "custeioPecuaria", "custeioGeral"] as const).map(valor),

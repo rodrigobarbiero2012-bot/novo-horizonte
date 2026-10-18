@@ -7,6 +7,10 @@ import { montarBackup } from "@/lib/relatorios/backup";
 import { listaParaExcel, listasParaExcel, modeloImportacao, relatorioParaExcel } from "@/lib/relatorios/excel";
 import { relatorioBalanco, relatorioDre, relatorioFluxo, relatorioOrcamento } from "@/lib/relatorios/tabelas";
 import { exigirUsuario } from "@/lib/usuario";
+import { hojeSP } from "@/lib/hoje";
+
+// Backup completo e exportações grandes.
+export const maxDuration = 60;
 
 // Exportação para Excel (.xlsx) dos relatórios, com os mesmos filtros da tela.
 //   /api/exportar/dre · /balanco · /fluxo?visao=2025 · /orcamento?ano=2026&ate=10 · /lancamentos?<filtros da lista>
@@ -28,7 +32,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/expor
   const usuario = await exigirUsuario();
   const { relatorio } = await params;
   const sp = Object.fromEntries(new URL(request.url).searchParams);
-  const hoje = new Date().toLocaleDateString("sv-SE");
+  const hoje = hojeSP();
   const anoAtual = Number(hoje.slice(0, 4));
 
   switch (relatorio) {
@@ -99,8 +103,10 @@ export async function GET(request: Request, { params }: RouteContext<"/api/expor
     case "backup": {
       const listas = await montarBackup();
       const conteudo = await listasParaExcel(listas);
-      // Registra o backup: o painel avisa quando o último tiver mais de 30 dias.
-      await prisma.registroAuditoria.create({
+      // Registra o backup (o painel avisa quando o último tiver mais de 30 dias) só quando o pedido
+      // vem do próprio site: um link de outro site não pode "apagar" o aviso sem ninguém guardar o arquivo.
+      const origem = request.headers.get("sec-fetch-site");
+      if (!origem || origem === "same-origin" || origem === "none") await prisma.registroAuditoria.create({
         data: { usuarioId: usuario.id, entidade: "Backup", entidadeId: hoje, acao: "EXPORTAR", depois: { abas: listas.map((l) => `${l.aba}: ${l.linhas.length}`), bytes: conteudo.length } },
       });
       revalidatePath("/"); // tira o aviso de backup do painel

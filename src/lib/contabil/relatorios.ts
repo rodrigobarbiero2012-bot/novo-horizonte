@@ -10,6 +10,8 @@ type Filtro = { categoria: Categoria; atividade?: Atividade };
 export const LINHAS_DRE = {
   receitaCafe: { rotulo: "Receita Café", filtro: { categoria: "Receita", atividade: "Café" } },
   receitaMaracuja: { rotulo: "Receita Maracujá", filtro: { categoria: "Receita", atividade: "Maracujá" } },
+  // Não existe na planilha original (milho até hoje sem venda); fica para não sumir receita futura.
+  receitaMilho: { rotulo: "Receita Milho", filtro: { categoria: "Receita", atividade: "Milho" } },
   receitaPecuaria: { rotulo: "Receita Pecuária", filtro: { categoria: "Receita", atividade: "Pecuária" } },
   outrasReceitas: { rotulo: "Outras Receitas (Diversas/Financeiras)", filtro: { categoria: "Receita", atividade: "Geral" } },
   custeioCafe: { rotulo: "Custeio Café", filtro: { categoria: "Custeio", atividade: "Café" } },
@@ -72,7 +74,7 @@ export function dreAnual(partidas: PartidaContabil[], anos: number[]): Map<numbe
     const linhas = Object.fromEntries(
       Object.entries(LINHAS_DRE).map(([chave, { filtro }]) => [chave, -soma(partidas, filtro, (x) => x === a)]),
     ) as Record<LinhaDre, number>;
-    const totalReceita = linhas.receitaCafe + linhas.receitaMaracuja + linhas.receitaPecuaria + linhas.outrasReceitas;
+    const totalReceita = linhas.receitaCafe + linhas.receitaMaracuja + linhas.receitaMilho + linhas.receitaPecuaria + linhas.outrasReceitas;
     const totalCusteio =
       linhas.custeioCafe + linhas.custeioMaracuja + linhas.custeioMilho + linhas.custeioPecuaria + linhas.custeioGeral;
     const margemContribuicao = totalReceita + totalCusteio;

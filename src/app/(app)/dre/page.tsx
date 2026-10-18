@@ -6,6 +6,7 @@ import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { percentual, reaisCurto } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
 import { Pagina } from "@/components/Pagina";
+import { anoSP } from "@/lib/hoje";
 
 export const metadata: Metadata = { title: "DRE" };
 
@@ -15,7 +16,7 @@ async function Conteudo() {
   const dre = dreAnual(partidas, todosAnos);
   // Anos sem receita nem custeio (ex.: 2014, só saldos iniciais) ficam de fora.
   const anos = todosAnos.filter((a) => dre.get(a)!.totalReceita !== 0 || dre.get(a)!.totalCusteio !== 0);
-  const anoAtual = new Date().getFullYear();
+  const anoAtual = anoSP();
 
   return (
     <>

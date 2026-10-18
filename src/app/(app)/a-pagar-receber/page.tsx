@@ -12,6 +12,7 @@ import { contaMaisUsada } from "@/lib/documentos/sugestoes";
 import { CATEGORIAS_BAIXA, categoriasDoTitulo } from "@/lib/titulos/categorias";
 import { faixaDoVencimento, projecaoSemanal, type TipoTitulo } from "@/lib/titulos/regras";
 import { exigirUsuario } from "@/lib/usuario";
+import { hojeSP, somarDias } from "@/lib/hoje";
 
 export const metadata: Metadata = { title: "A pagar e receber" };
 
@@ -21,9 +22,10 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 function referencias() {
   const agora = Date.now();
   const dia = 86_400_000;
+  const hoje = hojeSP();
   return {
-    hoje: new Date(agora).toLocaleDateString("sv-SE"),
-    em30: new Date(agora + 30 * dia).toLocaleDateString("sv-SE"),
+    hoje,
+    em30: somarDias(hoje, 30),
     desde60: new Date(agora - 60 * dia),
     desde120: new Date(agora - 120 * dia),
   };

@@ -3,6 +3,7 @@ import { cache } from "react";
 import { prisma } from "./db";
 import { carregarPartidas } from "./contabil/repositorio";
 import { CHAVES_PRODUTO, type ChaveProduto } from "./cotacoes/produtos";
+import { anoSP } from "./hoje";
 
 /** Partidas do razão inteiro, uma vez por requisição. ~10 mil linhas: cabe em memória sem esforço. */
 export const partidasDoRazao = cache(() => carregarPartidas(prisma));
@@ -13,7 +14,7 @@ export async function anosComMovimento(): Promise<number[]> {
     prisma.partida.findFirst({ orderBy: { data: "asc" }, select: { data: true } }),
     prisma.partida.findFirst({ orderBy: { data: "desc" }, select: { data: true } }),
   ]);
-  const atual = new Date().getFullYear();
+  const atual = anoSP();
   if (!primeiro || !ultimo) return [atual];
   const de = primeiro.data.getUTCFullYear();
   const ate = Math.max(atual, ultimo.data.getUTCFullYear());

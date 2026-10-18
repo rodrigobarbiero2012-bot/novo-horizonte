@@ -18,6 +18,10 @@ model Usuario {
   tentativasFalhas Int       @default(0)
   bloqueadoAte     DateTime?
 
+  // Vai dentro do cookie de sessão; aumentar o número derruba todas as sessões
+  // abertas do usuário ("sair de todos os aparelhos").
+  sessaoVersao Int @default(0)
+
   // Convite de primeiro acesso: só o sha256 do token fica no banco; o token
   // vai no link gerado em /convites. Uso único, com validade.
   conviteHash     String?   @unique
@@ -323,4 +327,5 @@ model RegistroAuditoria {
   em         DateTime @default(now())
 
   @@index([entidade, entidadeId])
+  @@index([entidade, em])
 }

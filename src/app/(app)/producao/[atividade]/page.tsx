@@ -11,6 +11,7 @@ import { calcularIndicadores } from "@/lib/producao/indicadores";
 import { PRODUTOS } from "@/lib/cotacoes/produtos";
 import { exigirUsuario } from "@/lib/usuario";
 import { alternarTalhao, criarTalhao, excluirMovimento, registrarMovimento } from "../acoes";
+import { hojeSP } from "@/lib/hoje";
 
 export const metadata: Metadata = { title: "Produção" };
 
@@ -32,7 +33,7 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
   if (!ehSlugProducao(slug)) notFound();
   const def = ATIVIDADES_PRODUCAO[slug];
 
-  const hoje = new Date().toLocaleDateString("sv-SE");
+  const hoje = hojeSP();
   const anoAtual = Number(hoje.slice(0, 4));
   const anoParam = Number((await searchParams).ano);
   const ano = Number.isInteger(anoParam) && anoParam >= 2014 && anoParam <= anoAtual ? anoParam : anoAtual;

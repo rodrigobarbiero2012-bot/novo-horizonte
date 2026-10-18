@@ -1,3 +1,5 @@
+import { ehDataIso } from "../validacao";
+
 // Validação de um lançamento digitado na tela, antes de ir para o banco.
 
 export type PartidaDigitada = {
@@ -30,13 +32,13 @@ export function lerValorBr(texto: string): number | null {
 /** Lista de erros; vazia quando o lançamento pode ser gravado. */
 export function validarLancamento(l: LancamentoDigitado, contasValidas: Set<string>): string[] {
   const erros: string[] = [];
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(l.data) || Number.isNaN(Date.parse(l.data))) erros.push("Data inválida.");
+  if (!ehDataIso(l.data)) erros.push("Data inválida.");
   if (!l.historico.trim()) erros.push("Informe o histórico.");
   if (l.partidas.length < 2) erros.push("Um lançamento precisa de pelo menos duas contas (débito e crédito).");
   l.partidas.forEach((p, i) => {
     if (!contasValidas.has(p.contaId)) erros.push(`Linha ${i + 1}: escolha uma conta.`);
     if (!Number.isInteger(p.valorCentavos) || p.valorCentavos === 0) erros.push(`Linha ${i + 1}: valor inválido.`);
-    if (p.data && (!/^\d{4}-\d{2}-\d{2}$/.test(p.data) || Number.isNaN(Date.parse(p.data)))) {
+    if (p.data && !ehDataIso(p.data)) {
       erros.push(`Linha ${i + 1}: data inválida.`);
     }
   });

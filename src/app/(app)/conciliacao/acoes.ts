@@ -6,6 +6,7 @@ import { casarAutomaticamente } from "@/lib/conciliacao/casamento";
 import { decodificarOfx, lerOfx } from "@/lib/conciliacao/ofx";
 import { CATEGORIAS_BAIXA } from "@/lib/titulos/categorias";
 import { exigirUsuario } from "@/lib/usuario";
+import { ehId } from "@/lib/validacao";
 
 export type EstadoConciliacao = { erro?: string; ok?: string } | undefined;
 
@@ -39,14 +40,18 @@ async function conciliarPendentes(contaId: string): Promise<number> {
     pendentes.map((t) => ({ id: t.id, data: iso(t.data), valorCentavos: t.valorCentavos })),
     partidas.map((p) => ({ id: p.id, data: iso(p.data), valorCentavos: p.valorCentavos })),
   );
-  for (const par of pares) {
-    await prisma.transacaoBancaria.update({ where: { id: par.transacaoId }, data: { status: "CONCILIADA", partidaId: par.partidaId } });
-  }
+  // Tudo ou nada, numa transação só (antes era uma atualização por vez, que podia parar no meio).
+  await prisma.$transaction(
+    pares.map((par) =>
+      prisma.transacaoBancaria.updateMany({ where: { id: par.transacaoId, status: "PENDENTE" }, data: { status: "CONCILIADA", partidaId: par.partidaId } }),
+    ),
+  );
   return pares.length;
 }
 
 export async function importarExtrato(contaId: string, _: EstadoConciliacao, form: FormData): Promise<EstadoConciliacao> {
   const usuario = await exigirUsuario();
+  if (!ehId(contaId)) return { erro: "Conta inválida." };
   const conta = await contaConciliavel(contaId);
   if (!conta) return { erro: "Escolha uma conta bancária (ou a CC do sócio)." };
   const arquivo = form.get("arquivo");
@@ -101,6 +106,7 @@ export async function importarExtrato(contaId: string, _: EstadoConciliacao, for
 
 export async function conciliarAutomatico(contaId: string) {
   await exigirUsuario();
+  if (!ehId(contaId)) return;
   if (!(await contaConciliavel(contaId))) return;
   await conciliarPendentes(contaId);
   revalidar();
@@ -108,12 +114,14 @@ export async function conciliarAutomatico(contaId: string) {
 
 export async function conciliarManual(transacaoId: string, partidaId: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(transacaoId) || !ehId(partidaId)) return;
   const [t, p] = await Promise.all([
     prisma.transacaoBancaria.findUnique({ where: { id: transacaoId } }),
     prisma.partida.findUnique({ where: { id: partidaId }, include: { transacaoBancaria: true } }),
   ]);
   if (!t || !p || t.status !== "PENDENTE" || p.contaId !== t.contaId || p.transacaoBancaria) return;
-  await prisma.transacaoBancaria.update({ where: { id: transacaoId }, data: { status: "CONCILIADA", partidaId } });
+  const { count } = await prisma.transacaoBancaria.updateMany({ where: { id: transacaoId, status: "PENDENTE" }, data: { status: "CONCILIADA", partidaId } });
+  if (count !== 1) return;
   await prisma.registroAuditoria.create({ data: { usuarioId: usuario.id, entidade: "TransacaoBancaria", entidadeId: transacaoId, acao: "CONCILIAR", depois: { partidaId } } });
   revalidar();
 }
@@ -121,6 +129,7 @@ export async function conciliarManual(transacaoId: string, partidaId: string) {
 /** Cria o lançamento que faltava (transação do extrato sem lançamento no sistema) e já concilia. */
 export async function lancarTransacao(transacaoId: string, _: EstadoConciliacao, form: FormData): Promise<EstadoConciliacao> {
   const usuario = await exigirUsuario();
+  if (!ehId(transacaoId)) return { erro: "Registro inválido." };
   const contrapartidaId = String(form.get("contaId") ?? "");
   const historico = String(form.get("historico") ?? "").trim();
   if (!historico) return { erro: "Informe o histórico." };
@@ -129,7 +138,10 @@ export async function lancarTransacao(transacaoId: string, _: EstadoConciliacao,
   const contrapartida = await prisma.conta.findUnique({ where: { id: contrapartidaId } });
   if (!contrapartida || contrapartida.id === t.contaId) return { erro: "Escolha a conta." };
 
-  await prisma.$transaction(async (tx) => {
+  const jaTratada = await prisma.$transaction(async (tx) => {
+    // Reserva a transação antes de lançar: um segundo clique não cria outro lançamento.
+    const { count } = await tx.transacaoBancaria.updateMany({ where: { id: transacaoId, status: "PENDENTE" }, data: { status: "CONCILIADA" } });
+    if (count !== 1) return true;
     const lancamento = await tx.lancamento.create({
       data: {
         data: t.data,
@@ -147,17 +159,20 @@ export async function lancarTransacao(transacaoId: string, _: EstadoConciliacao,
       include: { partidas: true },
     });
     const partidaDaConta = lancamento.partidas.find((p) => p.contaId === t.contaId)!;
-    await tx.transacaoBancaria.update({ where: { id: transacaoId }, data: { status: "CONCILIADA", partidaId: partidaDaConta.id } });
+    await tx.transacaoBancaria.update({ where: { id: transacaoId }, data: { partidaId: partidaDaConta.id } });
     await tx.registroAuditoria.create({
       data: { usuarioId: usuario.id, entidade: "Lancamento", entidadeId: lancamento.id, acao: "CRIAR", depois: { origem: "EXTRATO", historico, valorCentavos: t.valorCentavos, contrapartida: contrapartida.nome } },
     });
+    return false;
   });
+  if (jaTratada) return { erro: "Transação já tratada." };
   revalidar();
   return { ok: "Lançado e conciliado." };
 }
 
 export async function ignorarTransacao(transacaoId: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(transacaoId)) return;
   await prisma.transacaoBancaria.updateMany({ where: { id: transacaoId, status: "PENDENTE" }, data: { status: "IGNORADA" } });
   await prisma.registroAuditoria.create({ data: { usuarioId: usuario.id, entidade: "TransacaoBancaria", entidadeId: transacaoId, acao: "IGNORAR" } });
   revalidar();
@@ -166,6 +181,7 @@ export async function ignorarTransacao(transacaoId: string) {
 /** Volta a transação para pendente (desfaz conciliação ou "ignorar"). Não apaga lançamentos. */
 export async function reabrirTransacao(transacaoId: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(transacaoId)) return;
   await prisma.transacaoBancaria.update({ where: { id: transacaoId }, data: { status: "PENDENTE", partidaId: null } });
   await prisma.registroAuditoria.create({ data: { usuarioId: usuario.id, entidade: "TransacaoBancaria", entidadeId: transacaoId, acao: "REABRIR" } });
   revalidar();

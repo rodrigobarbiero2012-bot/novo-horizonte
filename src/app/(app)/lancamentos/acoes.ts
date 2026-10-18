@@ -7,6 +7,7 @@ import { vincularAnexo } from "@/lib/anexos";
 import { prisma } from "@/lib/db";
 import { lerValorBr, validarLancamento, type LancamentoDigitado } from "@/lib/contabil/lancamento";
 import { exigirUsuario } from "@/lib/usuario";
+import { ehId } from "@/lib/validacao";
 
 export type EstadoFormulario = { erros?: string[]; ok?: string } | undefined;
 
@@ -110,6 +111,11 @@ export async function criarLancamento(_: EstadoFormulario, form: FormData): Prom
 
 export async function atualizarLancamento(id: string, _: EstadoFormulario, form: FormData): Promise<EstadoFormulario> {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return { erros: ["Registro inválido."] };
+  // Lançamento gerado pela baixa de um título: editar aqui deixaria o título com outro valor/data/conta.
+  if (await prisma.titulo.findUnique({ where: { lancamentoId: id }, select: { id: true } })) {
+    return { erros: ["Este lançamento veio do pagamento de uma conta a pagar/receber. Para mudar valor, data ou conta, desfaça a baixa em “A pagar e receber” e registre de novo."] };
+  }
   const v = await validar(form);
   if (!v.lancamento) return { erros: v.erros };
   const l = v.lancamento;
@@ -145,6 +151,7 @@ export async function atualizarLancamento(id: string, _: EstadoFormulario, form:
 
 export async function excluirLancamento(id: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return;
   await prisma.$transaction(async (tx) => {
     const antes = await tx.lancamento.findUniqueOrThrow({ where: { id }, include: { partidas: true } });
     // Lançamento gerado pela baixa de uma conta a pagar/receber: o título volta a ficar em aberto,

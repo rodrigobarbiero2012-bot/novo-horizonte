@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db";
 import { dataBr } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
 import { adicionarTarefa, alternarTarefa, criarDoModelo, excluirTarefa } from "../acoes";
+import { hojeSP } from "@/lib/hoje";
 
 export const metadata: Metadata = { title: "Cronograma" };
 
@@ -20,8 +21,8 @@ async function Conteudo({ params, searchParams }: PageProps<"/cronograma/[ativid
   if (!ehSlugAtividade(slug)) notFound();
   const { chave, nome } = ATIVIDADES_CRONOGRAMA[slug];
 
-  const agora = new Date();
-  const hoje = { ano: agora.getFullYear(), mes: agora.getMonth() + 1 };
+  const dataHoje = hojeSP();
+  const hoje = { ano: Number(dataHoje.slice(0, 4)), mes: Number(dataHoje.slice(5, 7)) };
   const anoParam = Number((await searchParams).ano);
   const ano = Number.isInteger(anoParam) && anoParam > 2000 && anoParam < 2100 ? anoParam : hoje.ano;
 

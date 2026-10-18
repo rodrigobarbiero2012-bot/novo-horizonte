@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { exigirUsuario } from "@/lib/usuario";
 import { normalizarNumero } from "@/lib/whatsapp/meta";
 import { CHAVE_NUMEROS, type NumeroAutorizado } from "@/lib/whatsapp/processar";
+import { ehId } from "@/lib/validacao";
 
 export type EstadoWhatsapp = { erro?: string; ok?: string } | undefined;
 
@@ -33,6 +34,7 @@ export async function salvarNumeros(_: EstadoWhatsapp, form: FormData): Promise<
 /** Tira o documento da caixa de entrada sem lançar (o arquivo é apagado). */
 export async function descartarDocumento(id: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return;
   const doc = await prisma.documentoRecebido.findUnique({ where: { id } });
   if (!doc || doc.status !== "PENDENTE") return;
   await prisma.$transaction(async (tx) => {

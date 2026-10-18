@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { ATIVIDADES_CRONOGRAMA, ehSlugAtividade, MODELOS } from "@/lib/cronograma/modelos";
 import { exigirUsuario } from "@/lib/usuario";
+import { ehId } from "@/lib/validacao";
 
 const caminho = (slug: string) => `/cronograma/${slug}`;
 
@@ -26,6 +27,7 @@ export async function criarDoModelo(slug: string, ano: number) {
 
 export async function alternarTarefa(slug: string, id: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return;
   const tarefa = await prisma.tarefaCronograma.findUnique({ where: { id } });
   if (!tarefa) return;
   const concluida = !tarefa.concluida;
@@ -60,6 +62,7 @@ export async function adicionarTarefa(slug: string, ano: number, _: EstadoTarefa
 
 export async function excluirTarefa(slug: string, id: string) {
   const usuario = await exigirUsuario();
+  if (!ehId(id)) return;
   const tarefa = await prisma.tarefaCronograma.findUnique({ where: { id } });
   if (!tarefa) return;
   await prisma.tarefaCronograma.delete({ where: { id } });
