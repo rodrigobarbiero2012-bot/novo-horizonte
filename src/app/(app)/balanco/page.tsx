@@ -1,32 +1,13 @@
 import type { Metadata } from "next";
-import { Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
-import { balancoAnual, type BalancoAno } from "@/lib/contabil/relatorios";
+import { BotaoExportar, Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
+import { balancoAnual } from "@/lib/contabil/relatorios";
+import { LINHAS_BALANCO_TELA } from "@/lib/relatorios/estrutura";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { reaisCurto, reais } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
 import { Pagina } from "@/components/Pagina";
 
 export const metadata: Metadata = { title: "Balanço" };
-
-type Linha = { tipo: "secao"; rotulo: string } | { tipo: "valor" | "total" | "destaque"; rotulo: string; chave: keyof BalancoAno };
-
-const LINHAS: Linha[] = [
-  { tipo: "secao", rotulo: "Ativo" },
-  { tipo: "valor", rotulo: "Caixa e bancos", chave: "caixaBancos" },
-  { tipo: "valor", rotulo: "Aplicações financeiras", chave: "aplicacoes" },
-  { tipo: "valor", rotulo: "Estoques", chave: "estoques" },
-  { tipo: "valor", rotulo: "Imobilizado (sem depreciação)", chave: "imobilizado" },
-  { tipo: "destaque", rotulo: "Total do ativo", chave: "totalAtivo" },
-  { tipo: "secao", rotulo: "Passivo" },
-  { tipo: "valor", rotulo: "Empréstimos e financiamentos", chave: "emprestimos" },
-  { tipo: "valor", rotulo: "Fornecedores / parcerias a pagar", chave: "fornecedores" },
-  { tipo: "total", rotulo: "Total do passivo", chave: "totalPassivo" },
-  { tipo: "secao", rotulo: "Patrimônio líquido" },
-  { tipo: "valor", rotulo: "Capital do sócio (CC ACM + saldos iniciais)", chave: "capitalSocio" },
-  { tipo: "valor", rotulo: "Resultado acumulado", chave: "resultadoAcumulado" },
-  { tipo: "total", rotulo: "Total do patrimônio líquido", chave: "totalPL" },
-  { tipo: "destaque", rotulo: "Total passivo + PL", chave: "totalPassivoPL" },
-];
 
 async function Conteudo() {
   await exigirUsuario();
@@ -37,7 +18,9 @@ async function Conteudo() {
 
   return (
     <>
-      <Cabecalho titulo="Balanço patrimonial" subtitulo="Saldos em 31 de dezembro de cada ano, em R$." />
+      <Cabecalho titulo="Balanço patrimonial" subtitulo="Saldos em 31 de dezembro de cada ano, em R$.">
+        <BotaoExportar href="/api/exportar/balanco" />
+      </Cabecalho>
       {comDiferenca.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <strong>Balanço não fecha em {comDiferenca.join(", ")}.</strong>{" "}
@@ -58,7 +41,7 @@ async function Conteudo() {
             </tr>
           </thead>
           <tbody>
-            {LINHAS.map((l, i) =>
+            {LINHAS_BALANCO_TELA.map((l, i) =>
               l.tipo === "secao" ? (
                 <LinhaSecao key={i} rotulo={l.rotulo} colunas={anos.length} />
               ) : (

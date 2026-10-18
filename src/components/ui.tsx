@@ -63,3 +63,12 @@ export const botaoSecundario =
   "inline-flex items-center rounded-md border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50";
 export const campo =
   "w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-folha-600 focus:ring-2 focus:ring-folha-100";
+
+/** Baixa o relatório da tela em Excel (.xlsx), com os mesmos filtros. */
+export function BotaoExportar({ href }: { href: string }) {
+  return (
+    <a href={href} download className={botaoSecundario} title="Baixar em Excel (.xlsx)">
+      ⬇ Excel
+    </a>
+  );
+}

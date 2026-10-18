@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { EditorOrcamento, type GrupoEditor } from "@/components/orcamento/EditorOrcamento";
 import { Pagina } from "@/components/Pagina";
-import { Abas, Cabecalho, Cartao, LinhaSecao, botaoSecundario, campo } from "@/components/ui";
+import { Abas, BotaoExportar, Cabecalho, Cartao, LinhaSecao, botaoSecundario, campo } from "@/components/ui";
 import type { LinhaDre } from "@/lib/contabil/relatorios";
 import { partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
@@ -117,6 +117,7 @@ async function Conteudo({ searchParams }: PageProps<"/orcamento">) {
             </select>
             <button className={botaoSecundario}>Ver</button>
           </form>
+          {temOrcamento && <BotaoExportar href={`/api/exportar/orcamento?ano=${ano}&ate=${ate}`} />}
         </div>
       </Cabecalho>
 

@@ -1,43 +1,13 @@
 import type { Metadata } from "next";
-import { Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
-import { dreAnual, type DreAno } from "@/lib/contabil/relatorios";
+import { BotaoExportar, Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
+import { dreAnual } from "@/lib/contabil/relatorios";
+import { LINHAS_DRE_TELA } from "@/lib/relatorios/estrutura";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { percentual, reaisCurto } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
 import { Pagina } from "@/components/Pagina";
 
 export const metadata: Metadata = { title: "DRE" };
-
-type Linha =
-  | { tipo: "secao"; rotulo: string }
-  | { tipo: "valor" | "total" | "destaque"; rotulo: string; chave: keyof DreAno }
-  | { tipo: "pct"; rotulo: string; de: keyof DreAno };
-
-const LINHAS: Linha[] = [
-  { tipo: "secao", rotulo: "Receita operacional" },
-  { tipo: "valor", rotulo: "Café", chave: "receitaCafe" },
-  { tipo: "valor", rotulo: "Maracujá", chave: "receitaMaracuja" },
-  { tipo: "valor", rotulo: "Pecuária", chave: "receitaPecuaria" },
-  { tipo: "valor", rotulo: "Outras (diversas/financeiras)", chave: "outrasReceitas" },
-  { tipo: "total", rotulo: "Total receita", chave: "totalReceita" },
-  { tipo: "secao", rotulo: "Custeio (custo direto de produção)" },
-  { tipo: "valor", rotulo: "Café", chave: "custeioCafe" },
-  { tipo: "valor", rotulo: "Maracujá", chave: "custeioMaracuja" },
-  { tipo: "valor", rotulo: "Milho", chave: "custeioMilho" },
-  { tipo: "valor", rotulo: "Pecuária", chave: "custeioPecuaria" },
-  { tipo: "valor", rotulo: "Geral (não alocado)", chave: "custeioGeral" },
-  { tipo: "total", rotulo: "Total custeio", chave: "totalCusteio" },
-  { tipo: "destaque", rotulo: "Margem de contribuição", chave: "margemContribuicao" },
-  { tipo: "pct", rotulo: "Margem de contribuição %", de: "margemContribuicao" },
-  { tipo: "secao", rotulo: "Despesas operacionais" },
-  { tipo: "valor", rotulo: "Administrativas", chave: "despesasAdministrativas" },
-  { tipo: "valor", rotulo: "Financeiras", chave: "despesasFinanceiras" },
-  { tipo: "total", rotulo: "Total despesas", chave: "totalDespesas" },
-  { tipo: "valor", rotulo: "Resultado não operacional", chave: "resultadoNaoOperacional" },
-  { tipo: "destaque", rotulo: "Resultado do período", chave: "resultado" },
-  { tipo: "pct", rotulo: "Margem líquida %", de: "resultado" },
-  { tipo: "valor", rotulo: "Resultado acumulado", chave: "resultadoAcumulado" },
-];
 
 async function Conteudo() {
   await exigirUsuario();
@@ -52,7 +22,9 @@ async function Conteudo() {
       <Cabecalho
         titulo="DRE — Demonstração do Resultado"
         subtitulo={`Valores em R$ por ano. ${anoAtual} é parcial, até o último lançamento.`}
-      />
+      >
+        <BotaoExportar href="/api/exportar/dre" />
+      </Cabecalho>
       <Cartao className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -67,7 +39,7 @@ async function Conteudo() {
             </tr>
           </thead>
           <tbody>
-            {LINHAS.map((l, i) => {
+            {LINHAS_DRE_TELA.map((l, i) => {
               if (l.tipo === "secao") {
                 return <LinhaSecao key={i} rotulo={l.rotulo} colunas={anos.length} />;
               }

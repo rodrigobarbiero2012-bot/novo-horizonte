@@ -1,18 +1,13 @@
 import type { Metadata } from "next";
-import { Abas, Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
+import { Abas, BotaoExportar, Cabecalho, Cartao, LinhaSecao } from "@/components/ui";
 import { fluxoAnual, fluxoMensal, LINHAS_FLUXO, type FluxoMes } from "@/lib/contabil/fluxo";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { MESES, reaisCurto } from "@/lib/formato";
+import { GRUPOS_FLUXO } from "@/lib/relatorios/estrutura";
 import { exigirUsuario } from "@/lib/usuario";
 import { Pagina } from "@/components/Pagina";
 
 export const metadata: Metadata = { title: "Fluxo de caixa" };
-
-const GRUPOS = [
-  { grupo: "operacional", rotulo: "Atividades operacionais", total: "operacional" },
-  { grupo: "investimento", rotulo: "Investimentos", total: "investimento" },
-  { grupo: "financiamento", rotulo: "Financiamentos e sócio", total: "financiamento" },
-] as const;
 
 async function Conteudo({ searchParams }: PageProps<"/fluxo-caixa">) {
   await exigirUsuario();
@@ -49,13 +44,16 @@ async function Conteudo({ searchParams }: PageProps<"/fluxo-caixa">) {
         titulo="Fluxo de caixa realizado"
         subtitulo="Entradas positivas, saídas negativas. Caixa = bancos + aplicações."
       >
-        <Abas
-          atual={anoMensal ? String(anoMensal) : "anual"}
-          opcoes={[
-            { valor: "anual", rotulo: "Por ano", href: "/fluxo-caixa" },
-            ...anos.slice(-4).map((a) => ({ valor: String(a), rotulo: `${a} mês a mês`, href: `/fluxo-caixa?visao=${a}` })),
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Abas
+            atual={anoMensal ? String(anoMensal) : "anual"}
+            opcoes={[
+              { valor: "anual", rotulo: "Por ano", href: "/fluxo-caixa" },
+              ...anos.slice(-4).map((a) => ({ valor: String(a), rotulo: `${a} mês a mês`, href: `/fluxo-caixa?visao=${a}` })),
+            ]}
+          />
+          <BotaoExportar href={`/api/exportar/fluxo${anoMensal ? `?visao=${anoMensal}` : ""}`} />
+        </div>
       </Cabecalho>
       <Cartao className="overflow-x-auto">
         <table className="w-full bg-white text-sm">
@@ -71,7 +69,7 @@ async function Conteudo({ searchParams }: PageProps<"/fluxo-caixa">) {
           </thead>
           <tbody>
             {linha("Saldo inicial", "saldoInicial", "text-stone-500", false)}
-            {GRUPOS.map((g) => [
+            {GRUPOS_FLUXO.map((g) => [
               <LinhaSecao key={g.grupo} rotulo={g.rotulo} colunas={colunas.length} />,
               ...LINHAS_FLUXO.filter((l) => l.grupo === g.grupo).map((l) => linha(l.rotulo, l.chave)),
               linha(`Total ${g.rotulo.toLowerCase()}`, g.total, "border-t border-stone-200 font-medium bg-white", false),
