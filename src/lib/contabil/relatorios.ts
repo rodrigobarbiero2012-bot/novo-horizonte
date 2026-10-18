@@ -54,7 +54,7 @@ export type BalancoAno = {
 
 const ano = (p: PartidaContabil) => Number(p.data.slice(0, 4));
 
-function casa(p: PartidaContabil, f: Filtro) {
+export function casa(p: PartidaContabil, f: Filtro) {
   return p.categoria === f.categoria && (f.atividade === undefined || p.atividade === f.atividade);
 }
 

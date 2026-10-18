@@ -10,12 +10,13 @@ import { ATIVIDADES_CRONOGRAMA, PENDENCIAS_MODELO } from "@/lib/cronograma/model
 import { ATIVIDADES_PRODUCAO } from "@/lib/producao/atividades";
 import { anosComMovimento, contasAtivas, partidasDoRazao, resumoCotacoes } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
-import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
+import { dataBr, MESES, percentual, reais, reaisCurto } from "@/lib/formato";
+import { ehLinhaOrcamento, matrizVazia, mesDeCorte, realizadoMensal, somaAte, totaisMensais, type Matriz } from "@/lib/orcamento/calculo";
 import { exigirUsuario } from "@/lib/usuario";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     resumoCotacoes(),
@@ -32,6 +33,7 @@ async function Conteudo() {
     }),
     prisma.talhao.groupBy({ by: ["atividade"] }),
     prisma.movimentoProducao.groupBy({ by: ["atividade"] }),
+    prisma.orcamentoItem.findMany({ where: { ano: new Date().getFullYear() } }),
   ]);
   const comDados = new Set([...comTalhao, ...comMovimento].map((g) => g.atividade));
   const producaoPendente = Object.entries(ATIVIDADES_PRODUCAO).filter(([, def]) => !comDados.has(def.chave));
@@ -68,6 +70,18 @@ async function Conteudo() {
   const totalCustos = r.custeio + r.despesas;
   const maiorCusto = Math.max(1, ...custos.map((c) => c.valor));
   const maiorAtividade = Math.max(1, ...mix.atividades.map((a) => Math.max(a.receita, a.custeio)));
+
+  // Orçamento do ano: avisa quando os gastos até o mês atual passam 5% do orçado.
+  const orcado = matrizVazia();
+  for (const i of orcamento) if (ehLinhaOrcamento(i.linha)) orcado[i.linha][i.mes - 1] = i.valorCentavos;
+  const corte = mesDeCorte(ano, hoje);
+  const gastosDe = (m: Matriz) => {
+    const t = totaisMensais(m);
+    return -(somaAte(t.totalCusteio, corte) + somaAte(t.totalDespesas, corte));
+  };
+  const gastosOrcados = gastosDe(orcado);
+  const gastosReais = gastosDe(realizadoMensal(partidas, ano));
+  const estouro = orcamento.length > 0 && gastosOrcados > 0 && gastosReais > gastosOrcados * 1.05 ? (gastosReais - gastosOrcados) / gastosOrcados : null;
 
   return (
     <>
@@ -115,6 +129,15 @@ async function Conteudo() {
               .{" "}
               <Link href="/a-pagar-receber" className="underline">
                 Ver contas
+              </Link>
+            </li>
+          )}
+          {estouro !== null && (
+            <li>
+              <strong>Orçamento:</strong> custeio + despesas de {ano} até {MESES[corte - 1].toLowerCase()} estão{" "}
+              <span className="font-semibold text-red-700">{percentual(estouro, 1)} acima do orçado</span> (R$ {reaisCurto(gastosReais)} × R$ {reaisCurto(gastosOrcados)}).{" "}
+              <Link href={`/orcamento?ano=${ano}`} className="underline">
+                Ver orçamento
               </Link>
             </li>
           )}

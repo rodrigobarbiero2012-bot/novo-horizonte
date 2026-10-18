@@ -244,6 +244,20 @@ model TarefaCronograma {
   @@index([atividade, ano])
 }
 
+// Orçamento anual por linha da DRE e mês. `linha` é uma chave de LINHAS_DRE
+// (src/lib/contabil/relatorios.ts) e o valor segue o sinal da DRE: receita
+// positiva, custeio e despesas negativos.
+model OrcamentoItem {
+  id            String   @id @default(cuid())
+  ano           Int
+  linha         String
+  mes           Int // 1–12
+  valorCentavos Int
+  atualizadoEm  DateTime @updatedAt
+
+  @@unique([ano, linha, mes])
+}
+
 // Quem fez o quê: toda criação, alteração e exclusão de lançamento ou conta.
 model RegistroAuditoria {
   id         String   @id @default(cuid())
