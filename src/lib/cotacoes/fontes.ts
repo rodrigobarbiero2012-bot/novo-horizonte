@@ -39,6 +39,35 @@ export async function buscarCepea(url: string): Promise<PontoCotacao[]> {
   return lerTabelaCepea(await resposta.text());
 }
 
+/**
+ * "Indicador da Vaca" (Datagro) publicado pelo Notícias Agrícolas: a página traz
+ * vários dias, cada um num bloco "Fechamento: dd/mm/aaaa" seguido de uma tabela
+ * Estado | R$/@ | Variação | US$/@. Devolve o valor do estado pedido em cada dia.
+ */
+export function lerIndicadorVaca(html: string, estado = "São Paulo"): PontoCotacao[] {
+  const pontos: PontoCotacao[] = [];
+  const blocos = html.split(/<div class="fechamento">\s*Fechamento:\s*/).slice(1);
+  for (const bloco of blocos) {
+    const data = bloco.match(/^(\d{2}\/\d{2}\/\d{4})/)?.[1];
+    if (!data) continue;
+    const tabela = bloco.slice(0, bloco.indexOf("</table>"));
+    for (const linha of tabela.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+      const celulas = [...linha[1].matchAll(/<td[^>]*>([^<]*)<\/td>/g)].map((m) => m[1].trim());
+      if (celulas[0] !== estado) continue;
+      const valor = numeroBr(celulas[1] ?? "");
+      if (Number.isFinite(valor) && valor > 0) pontos.push({ data: dataBr(data), valor });
+    }
+  }
+  if (!pontos.length) throw new Error(`Indicador da Vaca: nenhuma cotação de ${estado} lida (layout mudou?)`);
+  return pontos;
+}
+
+export async function buscarVacaGorda(url: string): Promise<PontoCotacao[]> {
+  const resposta = await fetch(url, { headers: { "user-agent": AGENTE }, cache: "no-store" });
+  if (!resposta.ok) throw new Error(`Notícias Agrícolas: HTTP ${resposta.status}`);
+  return lerIndicadorVaca(await resposta.text());
+}
+
 /** Resposta da API PTAX do Banco Central (CotacaoDolarPeriodo). Último boletim de cada dia. */
 export function lerPtax(json: { value: { cotacaoVenda: number; dataHoraCotacao: string }[] }): PontoCotacao[] {
   const porDia = new Map<string, number>();

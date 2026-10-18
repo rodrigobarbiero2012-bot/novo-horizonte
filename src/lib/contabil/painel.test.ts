@@ -39,7 +39,7 @@ describe("painel", () => {
 
   it("mix por atividade separa o custeio Geral e as despesas como não alocados", () => {
     const { atividades, naoAlocado } = mixAtividades(razao, atual);
-    expect(atividades).toEqual([{ atividade: "Maracujá", receita: 400000, custeio: 150000, margem: 250000 }]);
+    expect(atividades).toEqual([{ atividade: "Maracujá", receita: 400000, custeio: 150000, margem: 250000, compraAnimais: 0 }]);
     expect(naoAlocado).toBe(100000);
   });
 
@@ -70,3 +70,20 @@ describe("painel", () => {
     expect(variacao(10, 0)).toBeNull();
   });
 });
+
+describe("compra de animais", () => {
+  it("entrada no estoque de gado aparece na Pecuária, fora da margem", () => {
+    const periodo = { inicio: "2026-01-01", fim: "2026-12-31" };
+    const r = mixAtividades(
+      [
+        p("2026-10-02", "Ativo Estoque", "N/A", 40000, "Estoque de Gado"),
+        p("2026-10-02", "PL Capital Sócio", "N/A", -40000, "CC ACM"),
+        p("2026-06-01", "Ativo Estoque", "N/A", 5000, "Estoques (Café/Produtos)"), // estoque de café: não é animal
+        p("2026-07-01", "Receita", "Pecuária", -16000, "Receita Venda Gado"),
+      ],
+      periodo,
+    );
+    expect(r.atividades).toEqual([{ atividade: "Pecuária", receita: 1600000, custeio: 0, margem: 1600000, compraAnimais: 4000000 }]);
+  });
+});
+

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lerPtax, lerTabelaCepea } from "./fontes";
+import { lerIndicadorVaca, lerPtax, lerTabelaCepea } from "./fontes";
 
 // Trecho no formato real da página do CEPEA (indicador principal + uma segunda tabela que deve ser ignorada).
 const HTML_CEPEA = `
@@ -48,3 +48,35 @@ describe("lerPtax", () => {
     ]);
   });
 });
+
+// Trecho no formato real da página "Indicador da Vaca" (Notícias Agrícolas / Datagro): um bloco por dia.
+const bloco = (data: string, sp: string) => `
+<div class="cotacao"><div class="info"><div class="text-infos"><div class="title-descricao">
+  <div class="fechamento">Fechamento: ${data}</div>
+</div><div class="fonte"><span>Fonte: Datagro</span></div></div></div>
+<div class="table-content"><table class="cot-fisicas">
+  <thead class="head-box"><tr><th>Estado</th><th>R$/@</th><th>Variação (%)</th><th>U$/@</th></tr></thead>
+  <tbody class="body-box">
+    <tr><td>Goiás</td><td>349,93</td><td>+0,23</td><td>68,80</td></tr>
+    <tr>
+      <td>São Paulo</td>
+      <td>${sp}</td>
+      <td>+1,53</td>
+      <td>69,33</td>
+    </tr>
+  </tbody>
+</table></div></div>`;
+
+describe("lerIndicadorVaca", () => {
+  it("lê o valor de São Paulo em cada dia publicado", () => {
+    expect(lerIndicadorVaca(bloco("15/10/2026", "352,59") + bloco("14/10/2026", "1.347,30"))).toEqual([
+      { data: "2026-10-15", valor: 352.59 },
+      { data: "2026-10-14", valor: 1347.3 },
+    ]);
+  });
+  it("lê outro estado quando pedido e acusa layout desconhecido", () => {
+    expect(lerIndicadorVaca(bloco("15/10/2026", "352,59"), "Goiás")).toEqual([{ data: "2026-10-15", valor: 349.93 }]);
+    expect(() => lerIndicadorVaca("<html></html>")).toThrow(/Indicador da Vaca/);
+  });
+});
+

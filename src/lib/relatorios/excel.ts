@@ -128,3 +128,50 @@ export async function listaParaExcel(l: Lista): Promise<Buffer> {
   ws.views = [{ state: "frozen", ySplit: linhaCabecalho }];
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+/** Modelo para importar lançamentos: aba "Lançamentos" (com 2 exemplos) e aba "Contas" com os nomes válidos. */
+export async function modeloImportacao(contas: { nome: string; categoria: string; atividade: string }[]): Promise<Buffer> {
+  const wb = novoArquivo();
+  const ws = wb.addWorksheet("Lançamentos");
+  const cab = ws.addRow(["Data", "Histórico", "Conta débito", "Conta crédito", "Valor"]);
+  cab.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  cab.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: VERDE } }));
+  const exemplo = (data: Date, historico: string, debito: string, credito: string, valor: number) =>
+    (ws.addRow([data, historico, debito, credito, valor]).font = { italic: true, color: { argb: "FF78716C" } });
+  const nome = (re: RegExp, padrao: string) => contas.find((c) => re.test(c.nome))?.nome ?? padrao;
+  exemplo(new Date(Date.UTC(2026, 9, 2)), "EXEMPLO — apague esta linha: adubo NPK nf 123", nome(/^Custeio Adubos$/, "Custeio Adubos"), nome(/CC ACM/, "CC ACM (Capital Sócio)"), 1234.56);
+  exemplo(new Date(Date.UTC(2026, 9, 5)), "EXEMPLO — apague esta linha: venda de café", nome(/CC ACM/, "CC ACM (Capital Sócio)"), nome(/^Receita.*Caf/i, "Receita Café"), 15000);
+  ws.getColumn(1).width = 12;
+  ws.getColumn(1).numFmt = "dd/mm/yyyy";
+  ws.getColumn(2).width = 50;
+  ws.getColumn(3).width = 34;
+  ws.getColumn(4).width = 34;
+  ws.getColumn(5).width = 14;
+  ws.getColumn(5).numFmt = "#,##0.00";
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+  // Lista suspensa com as contas nas colunas de débito e crédito.
+  const fim = contas.length + 1;
+  for (let linha = 2; linha <= 1001; linha++) {
+    for (const coluna of ["C", "D"]) {
+      ws.getCell(`${coluna}${linha}`).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: [`Contas!$A$2:$A$${fim}`],
+        showErrorMessage: true,
+        errorTitle: "Conta inexistente",
+        error: "Escolha uma conta da aba Contas.",
+      };
+    }
+  }
+
+  const wc = wb.addWorksheet("Contas");
+  const cabC = wc.addRow(["Conta", "Categoria", "Atividade"]);
+  cabC.font = { bold: true };
+  for (const c of contas) wc.addRow([c.nome, c.categoria, c.atividade]);
+  wc.getColumn(1).width = 40;
+  wc.getColumn(2).width = 26;
+  wc.getColumn(3).width = 12;
+  wc.autoFilter = { from: "A1", to: "C1" };
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+

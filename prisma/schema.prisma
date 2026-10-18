@@ -62,7 +62,7 @@ model Lancamento {
   id        String   @id @default(cuid())
   data      DateTime @db.Date
   historico String?
-  origem    String // "PLANILHA" | "MANUAL" | "DOCUMENTO" | "TITULO" | "EXTRATO"
+  origem    String // "PLANILHA" | "MANUAL" | "DOCUMENTO" | "TITULO" | "EXTRATO" | "IMPORTACAO"
 
   // Rastro da linha de origem na planilha Gerencial Financeiro (origem = PLANILHA)
   linhaPlanilhaInicio Int?

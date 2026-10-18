@@ -55,18 +55,33 @@ export function resumoPeriodo(partidas: PartidaContabil[], periodo: Periodo): Re
   };
 }
 
-export type MixAtividade = { atividade: Atividade; receita: number; custeio: number; margem: number };
+export type MixAtividade = { atividade: Atividade; receita: number; custeio: number; margem: number; compraAnimais: number };
 
-/** Receita, custeio direto e margem por atividade; custeio "Geral" e despesas ficam em naoAlocado. */
+/**
+ * Conta de estoque de animais (ex.: "Estoque de Gado"). Compra de animais vai
+ * para o estoque — é ativo, não custo do ano —, por isso aparece à parte.
+ */
+export const ehEstoqueAnimais = (p: PartidaContabil) => p.categoria === "Ativo Estoque" && /gado|boi|bezerr|novilh|vaca/i.test(p.conta ?? "");
+
+/**
+ * Receita, custeio direto e margem por atividade; custeio "Geral" e despesas
+ * ficam em naoAlocado. Compras de animais (entradas no estoque de gado) vão em
+ * `compraAnimais` da Pecuária, fora da margem.
+ */
 export function mixAtividades(partidas: PartidaContabil[], periodo: Periodo): { atividades: MixAtividade[]; naoAlocado: number } {
   const porAtividade = new Map<Atividade, MixAtividade>();
+  const da = (a: Atividade) => porAtividade.get(a) ?? { atividade: a, receita: 0, custeio: 0, margem: 0, compraAnimais: 0 };
   let naoAlocado = 0;
   for (const p of partidas) {
     if (!dentro(p, periodo)) continue;
     const ehReceita = p.categoria === "Receita" && p.atividade !== "Geral";
     const ehCusteioDireto = p.categoria === "Custeio" && p.atividade !== "Geral";
-    if (ehReceita || ehCusteioDireto) {
-      const m = porAtividade.get(p.atividade) ?? { atividade: p.atividade, receita: 0, custeio: 0, margem: 0 };
+    if (ehEstoqueAnimais(p) && p.valorCentavos > 0) {
+      const m = da("Pecuária");
+      m.compraAnimais += p.valorCentavos;
+      porAtividade.set("Pecuária", m);
+    } else if (ehReceita || ehCusteioDireto) {
+      const m = da(p.atividade);
       if (ehReceita) m.receita -= p.valorCentavos;
       else m.custeio += p.valorCentavos;
       m.margem = m.receita - m.custeio;

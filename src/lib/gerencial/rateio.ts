@@ -1,3 +1,4 @@
+import { ehEstoqueAnimais } from "../contabil/painel";
 import type { Atividade, PartidaContabil } from "../contabil/tipos";
 
 // Resultado gerencial por atividade: além da receita e do custeio direto de
@@ -56,6 +57,8 @@ export type ResultadoAtividades = {
   pesos: PorAtividade | null;
   rateado: Record<keyof Comuns, PorAtividade>;
   resultado: PorAtividade;
+  /** Entradas no estoque de gado (ativo, fora do resultado), atribuídas à Pecuária. */
+  compraAnimais: PorAtividade;
 };
 
 /**
@@ -72,10 +75,12 @@ export function resultadoPorAtividade(
   const receita = zeros();
   const custeio = zeros();
   const comuns: Comuns = { custeioGeral: 0, despesasAdministrativas: 0, despesasFinanceiras: 0, outrasReceitas: 0, depreciacaoGeral: 0 };
+  const compraAnimais = zeros();
   const prefixo = `${ano}-`;
   for (const p of partidas) {
     if (!p.data.startsWith(prefixo)) continue;
-    if (p.categoria === "Receita") {
+    if (ehEstoqueAnimais(p) && p.valorCentavos > 0) compraAnimais.Pecuária += p.valorCentavos;
+    else if (p.categoria === "Receita") {
       if (ehAtividadeRateio(p.atividade)) receita[p.atividade] -= p.valorCentavos;
       else comuns.outrasReceitas -= p.valorCentavos;
     } else if (p.categoria === "Custeio") {
@@ -106,5 +111,5 @@ export function resultadoPorAtividade(
       rateado.depreciacaoGeral[a] +
       rateado.outrasReceitas[a];
   }
-  return { receita, custeio, depreciacaoDireta, margemDireta, comuns, pesos: p, rateado, resultado };
+  return { receita, custeio, depreciacaoDireta, margemDireta, comuns, pesos: p, rateado, resultado, compraAnimais };
 }

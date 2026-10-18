@@ -1,10 +1,10 @@
 import { prisma } from "../db";
-import { buscarCepea, buscarDolarPtax, type PontoCotacao } from "./fontes";
+import { buscarCepea, buscarDolarPtax, buscarVacaGorda, type PontoCotacao } from "./fontes";
 import { PRODUTOS, type ChaveProduto } from "./produtos";
 
 const FONTES: Partial<Record<ChaveProduto, () => Promise<PontoCotacao[]>>> = {
   CAFE_ARABICA: () => buscarCepea(PRODUTOS.CAFE_ARABICA.url),
-  BOI_GORDO: () => buscarCepea(PRODUTOS.BOI_GORDO.url),
+  VACA_GORDA: () => buscarVacaGorda(PRODUTOS.VACA_GORDA.url),
   BEZERRO_MS: () => buscarCepea(PRODUTOS.BEZERRO_MS.url),
   DOLAR: () => buscarDolarPtax(),
 };

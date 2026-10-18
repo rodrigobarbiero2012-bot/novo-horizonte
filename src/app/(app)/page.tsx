@@ -222,7 +222,7 @@ async function Conteudo() {
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <Cartao className="p-5">
           <h2 className="mb-1 font-semibold text-stone-800">Resultado por atividade — {ano}</h2>
-          <p className="mb-4 text-xs text-stone-500">Receita e custeio direto de cada atividade; a margem não inclui custos gerais.</p>
+          <p className="mb-4 text-xs text-stone-500">Receita e custeio direto de cada atividade; a margem não inclui custos gerais. Compra de animais aparece à parte: vai para o estoque de gado.</p>
           <table className="w-full text-sm">
             <thead className="text-xs text-stone-500">
               <tr>
@@ -239,12 +239,22 @@ async function Conteudo() {
                     <span className="font-medium text-stone-800">{a.atividade}</span>
                     <span className="mt-1 block h-1.5 rounded-full bg-folha-600" style={{ width: `${(a.receita / maiorAtividade) * 100}%` }} />
                     <span className="mt-0.5 block text-[11px] text-stone-500">{percentual(a.receita, r.receita)} da receita</span>
+                    {a.compraAnimais > 0 && (
+                      <span className="block text-[11px] text-amber-800" title="Compra de animais vai para o estoque de gado (ativo): não é custo do ano, vira custo quando o animal é vendido.">
+                        compra de animais: {reaisCurto(a.compraAnimais)} (estoque)
+                      </span>
+                    )}
                   </td>
                   <td className="num py-2">{reaisCurto(a.receita)}</td>
                   <td className="num py-2">{reaisCurto(a.custeio)}</td>
                   <td className="num py-2 font-medium">
                     <span className={a.margem < 0 ? "neg" : ""}>{reaisCurto(a.margem)}</span>
                     <span className="block text-[11px] font-normal text-stone-500">{percentual(a.margem, a.receita)}</span>
+                    {a.compraAnimais > 0 && (
+                      <span className={`block text-[11px] font-normal ${a.margem - a.compraAnimais < 0 ? "text-red-700" : "text-stone-500"}`}>
+                        após compra: {reaisCurto(a.margem - a.compraAnimais)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

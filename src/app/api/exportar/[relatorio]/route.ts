@@ -2,12 +2,13 @@ import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { filtroLancamentos } from "@/lib/lancamentos/filtro";
 import { ehLinhaOrcamento, matrizVazia, mesDeCorte, realizadoMensal } from "@/lib/orcamento/calculo";
-import { listaParaExcel, relatorioParaExcel } from "@/lib/relatorios/excel";
+import { listaParaExcel, modeloImportacao, relatorioParaExcel } from "@/lib/relatorios/excel";
 import { relatorioBalanco, relatorioDre, relatorioFluxo, relatorioOrcamento } from "@/lib/relatorios/tabelas";
 import { exigirUsuario } from "@/lib/usuario";
 
 // Exportação para Excel (.xlsx) dos relatórios, com os mesmos filtros da tela.
 //   /api/exportar/dre · /balanco · /fluxo?visao=2025 · /orcamento?ano=2026&ate=10 · /lancamentos?<filtros da lista>
+//   /api/exportar/modelo-importacao (planilha modelo para importar lançamentos)
 
 const LIMITE_LANCAMENTOS = 50_000;
 
@@ -92,6 +93,10 @@ export async function GET(request: Request, { params }: RouteContext<"/api/expor
         ]),
       });
       return arquivo(lista, `Lançamentos Novo Horizonte ${hoje}.xlsx`);
+    }
+    case "modelo-importacao": {
+      const contas = await prisma.conta.findMany({ where: { ativa: true }, orderBy: [{ categoria: "asc" }, { nome: "asc" }], select: { nome: true, categoria: true, atividade: true } });
+      return arquivo(await modeloImportacao(contas), "Modelo de importação Novo Horizonte.xlsx");
     }
     default:
       return new Response("Relatório não encontrado.", { status: 404 });

@@ -95,6 +95,9 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
           <Link href="/lancamentos/novo" className={botaoSecundario}>
             Novo lançamento
           </Link>
+          <Link href="/lancamentos/importar" className={botaoSecundario}>
+            ⬆ Importar planilha
+          </Link>
           <BotaoExportar href={`/api/exportar/lancamentos${url({}).replace("/lancamentos", "")}`} />
         </div>
       </Cabecalho>

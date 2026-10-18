@@ -168,6 +168,17 @@ async function Conteudo({ searchParams }: PageProps<"/resultado-atividade">) {
               ))}
               <td />
             </tr>
+            {soma(r.compraAnimais) > 0 && (
+              <>
+                {linha("Compra de animais (vai para o estoque de gado)", neg(r.compraAnimais), -soma(r.compraAnimais), "text-amber-800")}
+                {linha(
+                  "Resultado após compra de animais",
+                  Object.fromEntries(ATIVIDADES_RATEIO.map((a) => [a, r.resultado[a] - r.compraAnimais[a]])) as Por,
+                  resultadoTotal - soma(r.compraAnimais),
+                  "font-medium",
+                )}
+              </>
+            )}
             {r.pesos && (
               <tr className="text-xs text-stone-500">
                 <td className="sticky left-0 bg-white px-4 py-1.5 pl-7">Peso no rateio</td>

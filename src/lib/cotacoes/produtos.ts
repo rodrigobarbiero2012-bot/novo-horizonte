@@ -1,5 +1,6 @@
 // Cotações acompanhadas no painel. Os dados do CEPEA são CC BY-NC 4.0:
-// exigem citar a fonte, que aparece junto de cada cotação.
+// exigem citar a fonte, que aparece junto de cada cotação. A vaca gorda não tem
+// indicador do CEPEA: vem do Indicador da Vaca (Datagro), praça São Paulo.
 
 export type Produto = {
   nome: string;
@@ -19,11 +20,11 @@ export const PRODUTOS = {
     casas: 2,
     automatica: true,
   },
-  BOI_GORDO: {
-    nome: "Boi gordo",
+  VACA_GORDA: {
+    nome: "Vaca gorda (SP)",
     unidade: "R$/@",
-    fonte: "CEPEA/ESALQ",
-    url: "https://www.cepea.org.br/br/indicador/boi-gordo.aspx",
+    fonte: "Datagro, via Notícias Agrícolas",
+    url: "https://www.noticiasagricolas.com.br/cotacoes/boi-gordo/indicador-da-vaca",
     casas: 2,
     automatica: true,
   },
