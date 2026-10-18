@@ -16,6 +16,7 @@ const ITENS: Item[] = [
   { href: "/balanco", rotulo: "Balanço" },
   { href: "/fluxo-caixa", rotulo: "Fluxo de caixa" },
   { href: "/orcamento", rotulo: "Orçamento × realizado" },
+  { href: "/resultado-atividade", rotulo: "Resultado por atividade" },
   {
     grupo: "Produção",
     itens: [

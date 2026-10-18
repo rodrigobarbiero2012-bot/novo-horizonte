@@ -7,6 +7,7 @@ import { Indicador, textoComparacao } from "@/components/painel/Indicador";
 import { dividaEm, maioresCustos, mixAtividades, resumoPeriodo, ultimos12Meses, umAnoAntes, variacao } from "@/lib/contabil/painel";
 import { balancoAnual, dreAnual } from "@/lib/contabil/relatorios";
 import { ATIVIDADES_CRONOGRAMA, PENDENCIAS_MODELO } from "@/lib/cronograma/modelos";
+import { taxasDepreciacao } from "@/lib/gerencial/parametros";
 import { ATIVIDADES_PRODUCAO } from "@/lib/producao/atividades";
 import { anosComMovimento, contasAtivas, partidasDoRazao, resumoCotacoes } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
@@ -16,7 +17,7 @@ import { exigirUsuario } from "@/lib/usuario";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento, taxas] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     resumoCotacoes(),
@@ -34,7 +35,9 @@ async function Conteudo() {
     prisma.talhao.groupBy({ by: ["atividade"] }),
     prisma.movimentoProducao.groupBy({ by: ["atividade"] }),
     prisma.orcamentoItem.findMany({ where: { ano: new Date().getFullYear() } }),
+    taxasDepreciacao(),
   ]);
+  const taxasAConfirmar = taxas.filter((t) => !t.definida && t.confirmar);
   const comDados = new Set([...comTalhao, ...comMovimento].map((g) => g.atividade));
   const producaoPendente = Object.entries(ATIVIDADES_PRODUCAO).filter(([, def]) => !comDados.has(def.chave));
 
@@ -168,6 +171,14 @@ async function Conteudo() {
               </li>
             );
           })}
+          {taxasAConfirmar.length > 0 && (
+            <li>
+              <strong>Depreciação — confirmar taxas:</strong> {taxasAConfirmar.map((t) => t.nome.replace(/^Imobilizado - /, "").toLowerCase()).join(" e ")}.{" "}
+              <Link href="/resultado-atividade" className="underline">
+                Ver resultado por atividade
+              </Link>
+            </li>
+          )}
           {anosSemFechar.length > 0 && (
             <li>
               Balanço não fecha em {anosSemFechar.join(" e ")} — datas de lançamento em ano errado.{" "}

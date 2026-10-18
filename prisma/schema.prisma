@@ -268,6 +268,14 @@ model Anexo {
   @@index([tituloId])
 }
 
+// Parâmetros gerenciais editáveis na tela (ex.: taxas de depreciação por conta,
+// percentuais de rateio). `valor` é JSON; o formato de cada chave está onde ela é usada.
+model Configuracao {
+  chave        String   @id
+  valor        Json
+  atualizadoEm DateTime @updatedAt
+}
+
 // Orçamento anual por linha da DRE e mês. `linha` é uma chave de LINHAS_DRE
 // (src/lib/contabil/relatorios.ts) e o valor segue o sinal da DRE: receita
 // positiva, custeio e despesas negativos.
