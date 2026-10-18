@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { exigirUsuario } from "@/lib/usuario";
+import { normalizarNumero } from "@/lib/whatsapp/meta";
 import { CHAVE_NUMEROS, type NumeroAutorizado } from "@/lib/whatsapp/processar";
 
 export type EstadoWhatsapp = { erro?: string; ok?: string } | undefined;
@@ -13,11 +14,12 @@ export async function salvarNumeros(_: EstadoWhatsapp, form: FormData): Promise<
   const numeros: NumeroAutorizado[] = [];
   for (let i = 0; i < 6; i++) {
     const nome = String(form.get(`nome${i}`) ?? "").trim();
-    const digitos = String(form.get(`numero${i}`) ?? "").replace(/\D/g, "");
-    if (!nome && !digitos) continue;
+    const texto = String(form.get(`numero${i}`) ?? "").trim();
+    if (!nome && !texto) continue;
     if (!nome) return { erro: "Informe o nome de cada número." };
-    if (digitos.length < 10 || digitos.length > 13) return { erro: `Número de ${nome} inválido: use DDD + número, ex.: (11) 98765-4321.` };
-    numeros.push({ nome, numero: digitos.length <= 11 ? `55${digitos}` : digitos });
+    const numero = normalizarNumero(texto);
+    if (!numero) return { erro: `Número de ${nome} inválido: use um celular brasileiro com DDD, ex.: (11) 98765-4321.` };
+    numeros.push({ nome, numero });
   }
   const antes = await prisma.configuracao.findUnique({ where: { chave: CHAVE_NUMEROS } });
   await prisma.configuracao.upsert({ where: { chave: CHAVE_NUMEROS }, create: { chave: CHAVE_NUMEROS, valor: numeros }, update: { valor: numeros } });

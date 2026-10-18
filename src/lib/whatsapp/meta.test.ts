@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { assinaturaValida, chaveNumero, formatarNumero, lerNotificacao, mesmoNumero } from "./meta";
+import { assinaturaValida, formatarNumero, lerNotificacao, mesmoNumero, normalizarNumero } from "./meta";
 
 const notificacao = {
   object: "whatsapp_business_account",
@@ -70,7 +70,13 @@ describe("números", () => {
     expect(mesmoNumero("+55 (11) 98765-4321", "5511987654321")).toBe(true);
     expect(mesmoNumero("11 98765-4321", "5511987654321")).toBe(true);
     expect(mesmoNumero("5511987654321", "5521987654321")).toBe(false); // outro DDD
-    expect(chaveNumero("5531912345678")).toBe("3112345678");
+    expect(normalizarNumero("553112345678")).toBe("5531912345678");
+  });
+  it("não aceita número estrangeiro nem malformado que termine igual", () => {
+    expect(mesmoNumero("1118765432100", "5511987654321")).toBe(false); // estrangeiro com o mesmo final
+    expect(mesmoNumero("44 11 98765-4321", "5511987654321")).toBe(false);
+    expect(mesmoNumero("5511987654321999", "5511987654321")).toBe(false);
+    expect(mesmoNumero("", "")).toBe(false);
   });
   it("formata para exibir", () => {
     expect(formatarNumero("5511987654321")).toBe("+55 11 98765-4321");

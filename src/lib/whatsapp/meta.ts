@@ -57,18 +57,25 @@ export function lerNotificacao(corpo: unknown): MensagemRecebida[] {
 }
 
 /**
- * Chave para comparar números brasileiros: DDD + últimos 8 dígitos. O WhatsApp
- * às vezes identifica celulares sem o 9 inicial (55 11 8765-4321 em vez de
- * 55 11 98765-4321), então o 9 não entra na comparação.
+ * Número brasileiro completo (55 + DDD + 9 dígitos), ou null se não for
+ * brasileiro. O WhatsApp às vezes identifica celulares sem o 9 inicial
+ * (55 11 8765-4321 em vez de 55 11 98765-4321): o 9 é recolocado.
  */
-export function chaveNumero(numero: string): string {
+export function normalizarNumero(numero: string): string | null {
   let d = numero.replace(/\D/g, "");
-  if (d.startsWith("55") && d.length >= 12) d = d.slice(2);
-  if (d.length < 10) return d;
-  return d.slice(0, 2) + d.slice(-8);
+  if (d.length === 10 || d.length === 11) d = "55" + d; // sem DDI
+  if (!d.startsWith("55")) return null;
+  const resto = d.slice(2);
+  if (resto.length === 10) return `55${resto.slice(0, 2)}9${resto.slice(2)}`;
+  if (resto.length === 11) return d;
+  return null;
 }
 
-export const mesmoNumero = (a: string, b: string) => chaveNumero(a) === chaveNumero(b);
+/** Igualdade exata do número normalizado (números estrangeiros ou malformados nunca casam). */
+export function mesmoNumero(a: string, b: string): boolean {
+  const x = normalizarNumero(a);
+  return x !== null && x === normalizarNumero(b);
+}
 
 /** "5511987654321" → "+55 11 98765-4321" (só para exibir). */
 export function formatarNumero(numero: string): string {
