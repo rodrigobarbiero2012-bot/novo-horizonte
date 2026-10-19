@@ -45,13 +45,15 @@ model Conta {
   ativa     Boolean  @default(true)
   criadoEm  DateTime @default(now())
 
-  apelidos     ContaApelido[]
-  partidas     Partida[]
-  titulos      Titulo[]            @relation("contaDoTitulo")
-  baixas       Titulo[]            @relation("contaDaBaixa")
-  extratos     ImportacaoExtrato[] @relation("contaDoExtrato")
-  vendas       Venda[]             @relation("contaDaVenda")
-  apontamentos Apontamento[]       @relation("contaDoApontamento")
+  apelidos              ContaApelido[]
+  partidas              Partida[]
+  titulos               Titulo[]            @relation("contaDoTitulo")
+  baixas                Titulo[]            @relation("contaDaBaixa")
+  extratos              ImportacaoExtrato[] @relation("contaDoExtrato")
+  vendas                Venda[]             @relation("contaDaVenda")
+  apontamentos          Apontamento[]       @relation("contaDoApontamento")
+  financiamentosPassivo Financiamento[]     @relation("passivoDoFinanciamento")
+  financiamentosJuros   Financiamento[]     @relation("jurosDoFinanciamento")
 }
 
 // Grafias antigas com que a conta aparece na planilha ("cc acm", "CC ACM"…),
@@ -68,7 +70,7 @@ model Lancamento {
   id        String   @id @default(cuid())
   data      DateTime @db.Date
   historico String?
-  origem    String // "PLANILHA" | "MANUAL" | "DOCUMENTO" | "TITULO" | "EXTRATO" | "IMPORTACAO" | "MAO_DE_OBRA"
+  origem    String // "PLANILHA" | "MANUAL" | "DOCUMENTO" | "TITULO" | "EXTRATO" | "IMPORTACAO" | "MAO_DE_OBRA" | "FINANCIAMENTO"
 
   // Rastro da linha de origem na planilha Gerencial Financeiro (origem = PLANILHA)
   linhaPlanilhaInicio Int?
@@ -81,10 +83,11 @@ model Lancamento {
   atualizadoPor   Usuario? @relation("atualizadoPor", fields: [atualizadoPorId], references: [id])
   atualizadoEm    DateTime @updatedAt
 
-  partidas            Partida[]
-  titulo              Titulo?
-  anexos              Anexo[]
-  fechamentoMaoDeObra FechamentoMaoDeObra?
+  partidas              Partida[]
+  titulo                Titulo?
+  anexos                Anexo[]
+  fechamentoMaoDeObra   FechamentoMaoDeObra?
+  financiamentoLiberado Financiamento?
 
   @@index([data])
   @@index([origem])
@@ -156,6 +159,9 @@ model Titulo {
   anexos             Anexo[]
   vendaId            String? // conta a receber gerada pela entrega de uma venda
   venda              Venda?             @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  financiamentoId    String? // parcela de um financiamento (ver Financiamento)
+  financiamento      Financiamento?     @relation(fields: [financiamentoId], references: [id], onDelete: SetNull)
+  jurosCentavos      Int? // parte de juros prevista na parcela; o resto é amortização
   entregaId          String?            @unique // a entrega (movimento de produção) que este título cobra
   entrega            MovimentoProducao? @relation("tituloDaEntrega", fields: [entregaId], references: [id], onDelete: SetNull)
 
@@ -318,6 +324,34 @@ model FechamentoMaoDeObra {
   criadoPorId      String?
   criadoEm         DateTime      @default(now())
   apontamentos     Apontamento[]
+}
+
+// Financiamento/empréstimo: cronograma gerado em contas a pagar (títulos), cada
+// parcela com a parte de juros separada. Na baixa, a amortização debita a
+// conta de passivo do empréstimo e os juros a despesa financeira.
+model Financiamento {
+  id                    String      @id @default(cuid())
+  credor                String // banco ou cooperativa
+  descricao             String // linha/finalidade: Pronaf, custeio, trator...
+  contaPassivoId        String
+  contaPassivo          Conta       @relation("passivoDoFinanciamento", fields: [contaPassivoId], references: [id])
+  contaJurosId          String
+  contaJuros            Conta       @relation("jurosDoFinanciamento", fields: [contaJurosId], references: [id])
+  valorCentavos         Int
+  taxaAnualPct          Float // taxa efetiva ao ano
+  sistema               String // "PRICE" | "SAC"
+  periodicidadeMeses    Int // 1, 3, 6 ou 12
+  parcelas              Int // de amortização
+  carencia              Int // períodos só de juros, antes das parcelas
+  dataContratacao       DateTime    @db.Date
+  primeiroVencimento    DateTime    @db.Date
+  liberacaoLancamentoId String?     @unique // lançamento da entrada do dinheiro, quando registrado aqui
+  liberacao             Lancamento? @relation(fields: [liberacaoLancamentoId], references: [id], onDelete: SetNull)
+  observacao            String?
+  criadoPorId           String?
+  criadoEm              DateTime    @default(now())
+
+  titulos Titulo[]
 }
 
 // Cronograma de produção: tarefas por atividade e ano, com checklist.

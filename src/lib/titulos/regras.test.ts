@@ -64,3 +64,19 @@ describe("projecaoSemanal", () => {
     ]);
   });
 });
+
+describe("partidasDaBaixa de financiamento", () => {
+  it("separa amortização (passivo) e juros (despesa financeira)", () => {
+    expect(partidasDaBaixa("PAGAR", "emprestimo", "banco", 888_488, { contaJurosId: "juros", jurosCentavos: 100_000 })).toEqual([
+      { contaId: "emprestimo", valorCentavos: 788_488 },
+      { contaId: "juros", valorCentavos: 100_000 },
+      { contaId: "banco", valorCentavos: -888_488 },
+    ]);
+    // carência: só juros
+    expect(partidasDaBaixa("PAGAR", "emprestimo", "banco", 1_800_000, { contaJurosId: "juros", jurosCentavos: 1_800_000 })).toEqual([
+      { contaId: "juros", valorCentavos: 1_800_000 },
+      { contaId: "banco", valorCentavos: -1_800_000 },
+    ]);
+  });
+});
+

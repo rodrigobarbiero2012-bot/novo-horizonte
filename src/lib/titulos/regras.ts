@@ -47,7 +47,25 @@ export function faixaDoVencimento(vencimento: string, hoje: string): Faixa {
  * A pagar: debita a conta do título (despesa, custo, passivo) e credita a de pagamento.
  * A receber: debita a conta de recebimento e credita a do título (receita).
  */
-export function partidasDaBaixa(tipo: TipoTitulo, contaTituloId: string, contaBaixaId: string, valorCentavos: number) {
+/**
+ * Pernas do lançamento da baixa. Parcela de financiamento (`juros`): a parte
+ * de amortização debita a conta do título (passivo do empréstimo) e a parte
+ * de juros, a conta de despesa financeira.
+ */
+export function partidasDaBaixa(
+  tipo: TipoTitulo,
+  contaTituloId: string,
+  contaBaixaId: string,
+  valorCentavos: number,
+  juros?: { contaJurosId: string; jurosCentavos: number },
+) {
+  if (tipo === "PAGAR" && juros && juros.jurosCentavos > 0) {
+    return [
+      ...(valorCentavos - juros.jurosCentavos !== 0 ? [{ contaId: contaTituloId, valorCentavos: valorCentavos - juros.jurosCentavos }] : []),
+      { contaId: juros.contaJurosId, valorCentavos: juros.jurosCentavos },
+      { contaId: contaBaixaId, valorCentavos: -valorCentavos },
+    ];
+  }
   return tipo === "PAGAR"
     ? [
         { contaId: contaTituloId, valorCentavos },

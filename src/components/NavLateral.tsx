@@ -13,6 +13,7 @@ const ITENS: Item[] = [
   { href: "/a-pagar-receber", rotulo: "A pagar e receber" },
   { href: "/vendas", rotulo: "Vendas" },
   { href: "/mao-de-obra", rotulo: "Mão de obra" },
+  { href: "/financiamentos", rotulo: "Financiamentos" },
   { href: "/conciliacao", rotulo: "Conciliação bancária" },
   { href: "/dre", rotulo: "DRE" },
   { href: "/balanco", rotulo: "Balanço" },

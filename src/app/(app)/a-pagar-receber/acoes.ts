@@ -6,6 +6,7 @@ import { vincularAnexo } from "@/lib/anexos";
 import { prisma } from "@/lib/db";
 import { lerValorBr } from "@/lib/contabil/lancamento";
 import { CATEGORIAS_BAIXA, categoriasDoTitulo } from "@/lib/titulos/categorias";
+import { dividirPagamento } from "@/lib/financiamentos/calculo";
 import { gerarParcelas, partidasDaBaixa, type TipoTitulo } from "@/lib/titulos/regras";
 import { exigirUsuario } from "@/lib/usuario";
 import { ehDataIso, ehId } from "@/lib/validacao";
@@ -91,6 +92,12 @@ export async function baixarTitulo(id: string, _: EstadoTitulo, form: FormData):
     if (count !== 1) return "Este título não está em aberto.";
     const t = await tx.titulo.findUniqueOrThrow({ where: { id } });
     const tipo = t.tipo as TipoTitulo;
+    // Parcela de financiamento: a parte além da amortização prevista vai para juros (inclusive multa/atraso).
+    const fin = t.financiamentoId ? await tx.financiamento.findUnique({ where: { id: t.financiamentoId }, select: { contaJurosId: true } }) : null;
+    const juros =
+      fin && t.jurosCentavos !== null
+        ? { contaJurosId: fin.contaJurosId, jurosCentavos: dividirPagamento(valor, t.valorCentavos, t.jurosCentavos).juros }
+        : undefined;
     const parcela = t.parcela ? ` (${t.parcela}/${t.totalParcelas})` : "";
     const quando = new Date(data);
     const lancamento = await tx.lancamento.create({
@@ -100,7 +107,7 @@ export async function baixarTitulo(id: string, _: EstadoTitulo, form: FormData):
         origem: "TITULO",
         criadoPorId: usuario.id,
         atualizadoPorId: usuario.id,
-        partidas: { create: partidasDaBaixa(tipo, t.contaId, contaBaixaId, valor).map((p) => ({ ...p, data: quando })) },
+        partidas: { create: partidasDaBaixa(tipo, t.contaId, contaBaixaId, valor, juros).map((p) => ({ ...p, data: quando })) },
       },
     });
     await tx.titulo.update({

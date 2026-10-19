@@ -116,6 +116,9 @@ export async function atualizarLancamento(id: string, _: EstadoFormulario, form:
   if (await prisma.titulo.findUnique({ where: { lancamentoId: id }, select: { id: true } })) {
     return { erros: ["Este lançamento veio do pagamento de uma conta a pagar/receber. Para mudar valor, data ou conta, desfaça a baixa em “A pagar e receber” e registre de novo."] };
   }
+  if (await prisma.financiamento.findUnique({ where: { liberacaoLancamentoId: id }, select: { id: true } })) {
+    return { erros: ["Este lançamento é a liberação de um financiamento. Para mudar, exclua e cadastre o financiamento de novo em “Financiamentos”."] };
+  }
   if (await prisma.fechamentoMaoDeObra.findUnique({ where: { lancamentoId: id }, select: { id: true } })) {
     return { erros: ["Este lançamento é um fechamento de mão de obra. Para mudar, desfaça o fechamento em “Mão de obra” e feche de novo."] };
   }
