@@ -15,6 +15,8 @@ import { deveEnviar, montarEmail, type DadosLembrete } from "./email";
 //   SMTP_SERVIDOR opcional, padrão smtp.gmail.com (porta 465)
 // Destinatários: tabela Configuracao, chave abaixo; sem configuração, os usuários com senha.
 
+const limpar = (v: string | undefined) => (v ?? "").replace(/[\s"']/g, "");
+
 export const CHAVE_DESTINATARIOS = "lembretes.destinatarios"; // string[]
 export const VARIAVEIS_EMAIL = ["SMTP_USUARIO", "SMTP_SENHA"] as const;
 export const emailFaltando = () => VARIAVEIS_EMAIL.filter((v) => !process.env[v]);
@@ -75,9 +77,10 @@ export async function enviarLembrete(opcoes: { semanal: boolean; forcar?: boolea
     host: process.env.SMTP_SERVIDOR || "smtp.gmail.com",
     port: 465,
     secure: true,
-    auth: { user: process.env.SMTP_USUARIO, pass: process.env.SMTP_SENHA },
+    // O Google mostra a senha de app em blocos ("abcd efgh ijkl mnop"); espaços e aspas coladas junto são removidos.
+    auth: { user: limpar(process.env.SMTP_USUARIO), pass: limpar(process.env.SMTP_SENHA) },
     connectionTimeout: 15_000,
   });
-  await transporte.sendMail({ from: `"Novo Horizonte" <${process.env.SMTP_USUARIO}>`, to: para, subject: assunto, html, text: texto });
+  await transporte.sendMail({ from: `"Novo Horizonte" <${limpar(process.env.SMTP_USUARIO)}>`, to: para, subject: assunto, html, text: texto });
   return { enviado: true, motivo: `enviado para ${para.length} destinatário(s)` };
 }
