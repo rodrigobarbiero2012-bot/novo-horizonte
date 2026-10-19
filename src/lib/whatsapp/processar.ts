@@ -31,7 +31,8 @@ export async function numerosAutorizados(): Promise<NumeroAutorizado[]> {
 /** Endereço público do site, para os links nas respostas. */
 export function enderecoSite(): string {
   const host = process.env.SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
-  return (host || "http://localhost:3000").replace(/\/$/, "");
+  // Sem SITE_URL nem as variáveis de sistema da Vercel (desativadas no projeto), usa o endereço de produção.
+  return (host || "https://novo-horizonte-one.vercel.app").replace(/\/$/, "");
 }
 
 /** Hosts da Meta que podem receber o token (API e download de mídia). */
