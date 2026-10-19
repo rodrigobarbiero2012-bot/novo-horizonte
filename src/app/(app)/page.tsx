@@ -7,6 +7,8 @@ import { Indicador, textoComparacao } from "@/components/painel/Indicador";
 import { dividaEm, maioresCustos, mixAtividades, resumoPeriodo, ultimos12Meses, umAnoAntes, variacao } from "@/lib/contabil/painel";
 import { balancoAnual, dreAnual } from "@/lib/contabil/relatorios";
 import { ATIVIDADES_CRONOGRAMA, PENDENCIAS_MODELO } from "@/lib/cronograma/modelos";
+import { CHAVE_ULTIMA_EXECUCAO } from "@/lib/cotacoes/atualizar";
+import { PRODUTOS, type ChaveProduto } from "@/lib/cotacoes/produtos";
 import { taxasDepreciacao } from "@/lib/gerencial/parametros";
 import { ATIVIDADES_PRODUCAO } from "@/lib/producao/atividades";
 import { anosComMovimento, contasAtivas, partidasDoRazao, resumoCotacoes } from "@/lib/consultas";
@@ -18,7 +20,7 @@ import { anoSP, hojeSP, somarDias } from "@/lib/hoje";
 
 async function Conteudo() {
   const usuario = await exigirUsuario();
-  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento, taxas, recebidos, ultimoBackup] = await Promise.all([
+  const [partidas, anos, cotacoes, contas, recentes, semSenha, aPagarProximos, comTalhao, comMovimento, orcamento, taxas, recebidos, ultimoBackup, execucaoCotacoes] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     resumoCotacoes(),
@@ -39,7 +41,11 @@ async function Conteudo() {
     taxasDepreciacao(),
     prisma.documentoRecebido.count({ where: { status: "PENDENTE" } }),
     prisma.registroAuditoria.findFirst({ where: { entidade: "Backup" }, orderBy: { em: "desc" }, select: { em: true } }),
+    prisma.configuracao.findUnique({ where: { chave: CHAVE_ULTIMA_EXECUCAO } }),
   ]);
+  // Fontes de cotação que falharam na última execução automática.
+  const ultimaExecucao = execucaoCotacoes?.valor as { em: string; resultado: Record<string, { erro?: string }> } | undefined;
+  const fontesComErro = Object.entries(ultimaExecucao?.resultado ?? {}).filter(([, r]) => r.erro);
   const taxasAConfirmar = taxas.filter((t) => !t.definida && t.confirmar);
   const comDados = new Set([...comTalhao, ...comMovimento].map((g) => g.atividade));
   const producaoPendente = Object.entries(ATIVIDADES_PRODUCAO).filter(([, def]) => !comDados.has(def.chave));
@@ -147,6 +153,12 @@ async function Conteudo() {
               <a href="/api/exportar/backup" download className="underline">
                 Baixar backup completo
               </a>
+            </li>
+          )}
+          {fontesComErro.length > 0 && ultimaExecucao && (
+            <li>
+              <strong>Cotações:</strong> na atualização automática de {dataBr(hojeSP(new Date(ultimaExecucao.em)))} falhou{fontesComErro.length > 1 ? "aram" : ""}{" "}
+              {fontesComErro.map(([produto, r]) => `${PRODUTOS[produto as ChaveProduto]?.nome ?? produto} (${r.erro})`).join("; ")}.
             </li>
           )}
           {recebidos > 0 && (

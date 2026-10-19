@@ -10,6 +10,8 @@ const FONTES: Partial<Record<ChaveProduto, () => Promise<PontoCotacao[]>>> = {
   DOLAR: () => buscarDolarPtax(),
 };
 
+export const CHAVE_ULTIMA_EXECUCAO = "cotacoes.ultimaExecucao"; // { em, resultado }
+
 export type ResultadoAtualizacao = Record<string, { gravados: number } | { erro: string }>;
 
 /**
@@ -36,5 +38,11 @@ export async function atualizarCotacoes(): Promise<ResultadoAtualizacao> {
       }
     }),
   );
+  // Guarda o resultado da última execução (com o erro de cada fonte) para diagnóstico na tela e no banco.
+  await prisma.configuracao.upsert({
+    where: { chave: CHAVE_ULTIMA_EXECUCAO },
+    create: { chave: CHAVE_ULTIMA_EXECUCAO, valor: { em: new Date().toISOString(), resultado } },
+    update: { valor: { em: new Date().toISOString(), resultado } },
+  });
   return resultado;
 }
