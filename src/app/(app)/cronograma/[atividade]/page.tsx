@@ -58,10 +58,13 @@ async function Conteudo({ params, searchParams }: PageProps<"/cronograma/[ativid
         titulo={`Cronograma — ${nome}`}
         subtitulo="Etapas do ano em linha do tempo e checklist. Modelo inicial pelo calendário típico do Sudeste — ajuste com o agrônomo/veterinário."
       >
-        <Abas
-          atual={String(ano)}
-          opcoes={anos.map((a) => ({ valor: String(a), rotulo: String(a), href: `/cronograma/${slug}${a === hoje.ano ? "" : `?ano=${a}`}` }))}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Abas atual={slug} opcoes={Object.entries(ATIVIDADES_CRONOGRAMA).map(([s, a]) => ({ valor: s, rotulo: a.nome, href: `/cronograma/${s}` }))} />
+          <Abas
+            atual={String(ano)}
+            opcoes={anos.map((a) => ({ valor: String(a), rotulo: String(a), href: `/cronograma/${slug}${a === hoje.ano ? "" : `?ano=${a}`}` }))}
+          />
+        </div>
       </Cabecalho>
 
       {PENDENCIAS_MODELO[chave] && (

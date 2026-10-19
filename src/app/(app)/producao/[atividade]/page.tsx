@@ -72,7 +72,10 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
   return (
     <>
       <Cabecalho titulo={`Produção — ${def.nome}`} subtitulo={`Quantidades em ${def.unidade}. Custos e receitas vêm da contabilidade da atividade.`}>
-        <Abas atual={String(ano)} opcoes={anos.map((a) => ({ valor: String(a), rotulo: String(a), href: `/producao/${slug}${a === anoAtual ? "" : `?ano=${a}`}` }))} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Abas atual={slug} opcoes={Object.entries(ATIVIDADES_PRODUCAO).map(([s, d]) => ({ valor: s, rotulo: d.nome, href: `/producao/${s}` }))} />
+          <Abas atual={String(ano)} opcoes={anos.map((a) => ({ valor: String(a), rotulo: String(a), href: `/producao/${slug}${a === anoAtual ? "" : `?ano=${a}`}` }))} />
+        </div>
       </Cabecalho>
 
       {talhoes.length === 0 && movimentos.length === 0 && (

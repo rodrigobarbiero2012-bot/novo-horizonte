@@ -7,45 +7,56 @@ import { useState } from "react";
 type Link = { href: string; rotulo: string };
 type Item = Link | { grupo: string; itens: Link[] };
 
+// Menu por temas: só o Painel fica solto; o resto em grupos que abrem ao clicar.
 const ITENS: Item[] = [
   { href: "/", rotulo: "Painel" },
-  { href: "/lancamentos", rotulo: "Lançamentos" },
-  { href: "/a-pagar-receber", rotulo: "A pagar e receber" },
-  { href: "/vendas", rotulo: "Vendas" },
-  { href: "/mao-de-obra", rotulo: "Mão de obra" },
-  { href: "/financiamentos", rotulo: "Financiamentos" },
-  { href: "/conciliacao", rotulo: "Conciliação bancária" },
-  { href: "/dre", rotulo: "DRE" },
-  { href: "/balanco", rotulo: "Balanço" },
-  { href: "/fluxo-caixa", rotulo: "Fluxo de caixa" },
-  { href: "/orcamento", rotulo: "Orçamento × realizado" },
-  { href: "/resultado-atividade", rotulo: "Resultado por atividade" },
   {
-    grupo: "Produção",
+    grupo: "Financeiro",
     itens: [
-      { href: "/producao/cafe", rotulo: "Café" },
-      { href: "/producao/maracuja", rotulo: "Maracujá" },
-      { href: "/producao/milho", rotulo: "Milho" },
-      { href: "/producao/pecuaria", rotulo: "Pecuária" },
+      { href: "/lancamentos", rotulo: "Lançamentos" },
+      { href: "/a-pagar-receber", rotulo: "A pagar e receber" },
+      { href: "/conciliacao", rotulo: "Conciliação bancária" },
+      { href: "/financiamentos", rotulo: "Financiamentos" },
     ],
   },
   {
-    grupo: "Cronograma",
+    grupo: "Demonstrações financeiras",
     itens: [
-      { href: "/cronograma/cafe", rotulo: "Café" },
-      { href: "/cronograma/maracuja", rotulo: "Maracujá" },
-      { href: "/cronograma/milho", rotulo: "Milho" },
-      { href: "/cronograma/pecuaria", rotulo: "Pecuária" },
+      { href: "/dre", rotulo: "DRE" },
+      { href: "/balanco", rotulo: "Balanço" },
+      { href: "/fluxo-caixa", rotulo: "Fluxo de caixa" },
     ],
   },
-  { href: "/contas", rotulo: "Plano de contas" },
-  { href: "/lembretes", rotulo: "Lembretes por e-mail" },
-  { href: "/convites", rotulo: "Convidar sócio" }, // temporário
+  {
+    grupo: "Gestão",
+    itens: [
+      { href: "/orcamento", rotulo: "Orçamento × realizado" },
+      { href: "/resultado-atividade", rotulo: "Resultado por atividade" },
+    ],
+  },
+  {
+    grupo: "Campo",
+    itens: [
+      { href: "/producao", rotulo: "Produção" },
+      { href: "/vendas", rotulo: "Vendas" },
+      { href: "/mao-de-obra", rotulo: "Mão de obra" },
+      { href: "/cronograma", rotulo: "Cronograma" },
+    ],
+  },
+  {
+    grupo: "Configurações",
+    itens: [
+      { href: "/contas", rotulo: "Plano de contas" },
+      { href: "/lembretes", rotulo: "Lembretes por e-mail" },
+      { href: "/whatsapp", rotulo: "WhatsApp" },
+      { href: "/convites", rotulo: "Convidar sócio" }, // temporário
+    ],
+  },
 ];
 
 /**
- * Menu. Os grupos (Produção, Cronograma) ficam recolhidos e abrem ao clicar;
- * o grupo da página atual já vem aberto. Sem `caminho` (antes da URL ser
+ * Menu. Os grupos ficam recolhidos e abrem ao clicar; o grupo da página atual
+ * já vem aberto. Sem `caminho` (antes da URL ser
  * conhecida), nada aparece destacado.
  */
 export function ListaNav({ caminho }: { caminho?: string }) {
