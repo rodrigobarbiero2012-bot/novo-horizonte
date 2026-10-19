@@ -64,6 +64,10 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
   });
 
   const movimentosDoAno = movimentos.filter((m) => m.data.getUTCFullYear() === ano);
+  // Pecuária: compras de animais no ano (quantidade e valor total registrados no movimento).
+  const compras = movimentosDoAno.filter((m) => m.tipo === "COMPRA");
+  const cabecasCompradas = compras.reduce((s, m) => s + m.quantidade, 0);
+  const valorCompras = compras.reduce((s, m) => s + (m.valorCentavos ?? 0), 0);
   const rotuloTipo = (t: string) => (t === "VENDA" ? "Venda" : (def.tipos.find((x) => x.tipo === t)?.rotulo ?? t));
   const u = def.unidadeCurta;
   const reaisPorUnidade = (c: number | null) => (c === null ? "—" : `R$ ${reais(c)}`);
@@ -89,22 +93,38 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Numero rotulo={def.rotuloArea} valor={areaHa ? `${num(areaHa, 2)} ha` : "—"} nota={`${talhoes.filter((t) => t.ativo).length} ${pecuaria ? "pasto(s)" : "talhão(ões)"} ativo(s)`} />
-        <Numero
-          rotulo={pecuaria ? `Nascimentos ${ano}` : `Produção ${ano}`}
-          valor={ind.producaoAno ? `${num(ind.producaoAno, 1)} ${u}` : "—"}
-          nota={def.produtividade && ind.produtividade !== null ? `${num(ind.produtividade, 1)} ${def.produtividade}` : undefined}
-        />
+        {pecuaria ? (
+          <Numero
+            rotulo={`Aquisição ${ano}`}
+            valor={valorCompras ? `R$ ${reais(valorCompras)}` : "—"}
+            nota={cabecasCompradas ? `${num(cabecasCompradas, 0)} ${u} compradas` : "nenhuma compra registrada"}
+          />
+        ) : (
+          <Numero
+            rotulo={`Produção ${ano}`}
+            valor={ind.producaoAno ? `${num(ind.producaoAno, 1)} ${u}` : "—"}
+            nota={def.produtividade && ind.produtividade !== null ? `${num(ind.produtividade, 1)} ${def.produtividade}` : undefined}
+          />
+        )}
         <Numero
           rotulo={`${def.rotuloEstoque} ${ano === anoAtual ? "hoje" : `em 31/12/${ano}`}`}
           valor={ind.estoqueAtual ? `${num(ind.estoqueAtual, 1)} ${u}` : "—"}
           nota={ind.valorEstoque !== null && ind.estoqueAtual ? `≈ R$ ${reais(ind.valorEstoque)} pela cotação` : undefined}
         />
         <Numero rotulo={`Vendido ${ano}`} valor={ind.vendidoAno ? `${num(ind.vendidoAno, 1)} ${u}` : "—"} nota={`receita contábil R$ ${reais(receita)}`} />
-        <Numero
-          rotulo={`Custo direto por ${pecuaria ? "nascimento" : u}`}
-          valor={reaisPorUnidade(ind.custoPorUnidade)}
-          nota={`custeio de ${def.nome.toLowerCase()} em ${ano}: R$ ${reais(custeioDireto)} (sem custos gerais)`}
-        />
+        {pecuaria ? (
+          <Numero
+            rotulo="Custo de aquisição por cabeça"
+            valor={cabecasCompradas && valorCompras ? `R$ ${reais(Math.round(valorCompras / cabecasCompradas))}` : "—"}
+            nota={`custeio da pecuária em ${ano}: R$ ${reais(custeioDireto)} (sal, ração, tratos — fora da compra)`}
+          />
+        ) : (
+          <Numero
+            rotulo={`Custo direto por ${u}`}
+            valor={reaisPorUnidade(ind.custoPorUnidade)}
+            nota={`custeio de ${def.nome.toLowerCase()} em ${ano}: R$ ${reais(custeioDireto)} (sem custos gerais)`}
+          />
+        )}
         <Numero rotulo={`Preço médio realizado`} valor={reaisPorUnidade(ind.precoMedioRealizado)} nota="pelos valores das vendas registradas (ou receita contábil ÷ quantidade)" />
         {def.cotacao && (
           <Numero
@@ -132,7 +152,13 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
             </Link>
             , que dá a saída do estoque e cria a conta a receber.
           </p>
-          <FormMovimento acao={registrarMovimento.bind(null, slug)} tipos={def.tipos} talhoes={talhoes.filter((t) => t.ativo).map(({ id, nome }) => ({ id, nome }))} unidade={u} />
+          <FormMovimento
+            acao={registrarMovimento.bind(null, slug)}
+            tipos={def.tipos}
+            talhoes={talhoes.filter((t) => t.ativo).map(({ id, nome }) => ({ id, nome }))}
+            unidade={u}
+            comTalhao={!pecuaria}
+          />
         </Cartao>
         <Cartao className="p-5">
           <h2 className="mb-3 font-semibold text-stone-800">{pecuaria ? "Pastos" : "Talhões"}</h2>
@@ -177,9 +203,10 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
                 <th className="py-2 text-left font-medium">Data</th>
                 <th className="py-2 text-left font-medium">Tipo</th>
                 <th className="py-2 text-right font-medium">Quantidade ({u})</th>
-                <th className="py-2 text-left font-medium">Talhão</th>
-                <th className="py-2 text-right font-medium">Valor</th>
-                <th className="py-2 text-left font-medium">Observação</th>
+                {!pecuaria && <th className="py-2 pl-4 text-left font-medium">Talhão</th>}
+                <th className="py-2 text-right font-medium">Valor total</th>
+                <th className="py-2 text-right font-medium">Unitário</th>
+                <th className="py-2 pl-4 text-left font-medium">Observação</th>
                 <th />
               </tr>
             </thead>
@@ -194,9 +221,10 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
                       {sinal < 0 ? "−" : "+"}
                       {num(Math.abs(m.quantidade), 2)}
                     </td>
-                    <td className="py-1.5 text-stone-600">{m.talhao?.nome ?? "—"}</td>
+                    {!pecuaria && <td className="py-1.5 pl-4 text-stone-600">{m.talhao?.nome ?? "—"}</td>}
                     <td className="num py-1.5">{m.valorCentavos ? reais(m.valorCentavos) : ""}</td>
-                    <td className="max-w-xs truncate py-1.5 text-stone-600" title={m.observacao ?? ""}>
+                    <td className="num py-1.5 text-stone-500">{m.valorCentavos && m.quantidade ? reais(Math.round(m.valorCentavos / Math.abs(m.quantidade))) : ""}</td>
+                    <td className="max-w-xs truncate py-1.5 pl-4 text-stone-600" title={m.observacao ?? ""}>
                       {m.observacao}
                     </td>
                     <td className="py-1.5 text-right">

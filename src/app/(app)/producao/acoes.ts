@@ -64,14 +64,17 @@ export async function registrarMovimento(slug: string, _: EstadoProducao, form: 
   const tipo = String(form.get("tipo") ?? "") as TipoMovimento;
   const data = String(form.get("data") ?? "");
   const quantidade = numero(form.get("quantidade"));
-  const valor = lerValorBr(String(form.get("valor") ?? ""));
+  // Valor total digitado; se vazio, quantidade × valor unitário.
+  const valorDigitado = lerValorBr(String(form.get("valor") ?? ""));
+  const unitario = lerValorBr(String(form.get("valorUnitario") ?? ""));
   const talhaoId = String(form.get("talhaoId") ?? "") || null;
   if (!def.tipos.some((t) => t.tipo === tipo)) return { erro: "Escolha o tipo." };
   if (!ehDataIso(data)) return { erro: "Data inválida." };
   if (quantidade === null || quantidade === 0 || (tipo !== "AJUSTE" && quantidade < 0)) {
     return { erro: tipo === "AJUSTE" ? "Informe a diferença (positiva ou negativa)." : "Informe a quantidade." };
   }
-  if (Number.isNaN(valor)) return { erro: "Valor inválido." };
+  if (Number.isNaN(valorDigitado) || Number.isNaN(unitario)) return { erro: "Valor inválido." };
+  const valor = valorDigitado ?? (unitario !== null && quantidade !== null ? Math.round(Math.abs(quantidade) * unitario) : null);
   if (talhaoId && !(await prisma.talhao.findFirst({ where: { id: talhaoId, atividade: def.chave } }))) return { erro: "Talhão inválido." };
 
   const mov = await prisma.movimentoProducao.create({
