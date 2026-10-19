@@ -1,6 +1,7 @@
 // Cotações acompanhadas no painel. Os dados do CEPEA são CC BY-NC 4.0:
 // exigem citar a fonte, que aparece junto de cada cotação. A vaca gorda não tem
-// indicador do CEPEA: vem do Indicador da Vaca (Datagro), praça São Paulo.
+// indicador do CEPEA: vem do Indicador da Vaca (Datagro), praça São Paulo. O
+// maracujá azedo vem da Ceagesp (tipo 4A), publicado pelo Notícias Agrícolas.
 
 export type Produto = {
   nome: string;
@@ -37,12 +38,12 @@ export const PRODUTOS = {
     automatica: true,
   },
   MARACUJA: {
-    nome: "Maracujá azedo",
+    nome: "Maracujá azedo (Ceagesp)",
     unidade: "R$/kg",
-    fonte: "registro manual",
-    url: "",
+    fonte: "Ceagesp/SP, via Notícias Agrícolas",
+    url: "https://www.noticiasagricolas.com.br/cotacoes/frutas/maracuja-ceasas",
     casas: 2,
-    automatica: false,
+    automatica: true,
   },
   DOLAR: {
     nome: "Dólar (PTAX venda)",

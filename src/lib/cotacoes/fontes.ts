@@ -64,6 +64,41 @@ export function lerIndicadorVaca(html: string, estado = "São Paulo"): PontoCota
   return pontos;
 }
 
+/**
+ * "Maracujá - Ceasas" do Notícias Agrícolas: um bloco por dia, com várias
+ * centrais na mesma tabela. A linha da central vem com "***" nos valores; as
+ * linhas seguintes são os tipos dela. Devolve o primeiro tipo "Azedo…" da
+ * central pedida (na Ceagesp, "Azedo 4A"), em R$/kg.
+ */
+export function lerMaracujaCeasa(html: string, central = "Ceagesp/SP"): PontoCotacao[] {
+  const pontos: PontoCotacao[] = [];
+  for (const bloco of html.split(/<div class="fechamento">\s*Fechamento:\s*/).slice(1)) {
+    const data = bloco.match(/^(\d{2}\/\d{2}\/\d{4})/)?.[1];
+    if (!data) continue;
+    let secao = "";
+    for (const linha of bloco.slice(0, bloco.indexOf("</table>")).matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+      const [tipo, preco] = [...linha[1].matchAll(/<td[^>]*>([^<]*)<\/td>/g)].map((m) => m[1].trim());
+      if (!tipo) continue;
+      if (preco === "***") {
+        secao = tipo;
+        continue;
+      }
+      if (secao !== central || !/^azedo/i.test(tipo)) continue;
+      const valor = numeroBr(preco ?? "");
+      if (Number.isFinite(valor) && valor > 0) pontos.push({ data: dataBr(data), valor });
+      break;
+    }
+  }
+  if (!pontos.length) throw new Error(`Maracujá: nenhuma cotação de ${central} lida (layout mudou?)`);
+  return pontos;
+}
+
+export async function buscarMaracuja(url: string): Promise<PontoCotacao[]> {
+  const resposta = await fetch(url, { headers: { "user-agent": AGENTE }, cache: "no-store", signal: AbortSignal.timeout(LIMITE_MS) });
+  if (!resposta.ok) throw new Error(`Notícias Agrícolas: HTTP ${resposta.status}`);
+  return lerMaracujaCeasa(await resposta.text());
+}
+
 export async function buscarVacaGorda(url: string): Promise<PontoCotacao[]> {
   const resposta = await fetch(url, { headers: { "user-agent": AGENTE }, cache: "no-store", signal: AbortSignal.timeout(LIMITE_MS) });
   if (!resposta.ok) throw new Error(`Notícias Agrícolas: HTTP ${resposta.status}`);

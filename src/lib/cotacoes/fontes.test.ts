@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lerIndicadorVaca, lerPtax, lerTabelaCepea } from "./fontes";
+import { lerIndicadorVaca, lerMaracujaCeasa, lerPtax, lerTabelaCepea } from "./fontes";
 
 // Trecho no formato real da página do CEPEA (indicador principal + uma segunda tabela que deve ser ignorada).
 const HTML_CEPEA = `
@@ -77,6 +77,38 @@ describe("lerIndicadorVaca", () => {
   it("lê outro estado quando pedido e acusa layout desconhecido", () => {
     expect(lerIndicadorVaca(bloco("15/10/2026", "352,59"), "Goiás")).toEqual([{ data: "2026-10-15", valor: 349.93 }]);
     expect(() => lerIndicadorVaca("<html></html>")).toThrow(/Indicador da Vaca/);
+  });
+});
+
+// Trecho no formato real da página "Maracujá - Ceasas": várias centrais na mesma tabela.
+const diaMaracuja = (data: string, ceagesp: string) => `
+<div class="cotacao"><div class="info"><div class="text-infos"><div class="title-descricao">
+<div class="fechamento">Fechamento: ${data}</div></div></div></div>
+<div class="table-content"><table class="cot-fisicas">
+<thead class="head-box"><tr><th>Tipo</th><th>Preço (R$/Kg)</th><th>Variação (%)</th></tr></thead>
+<tbody class="body-box">
+<tr><td>Ceasa Campinas/SP</td><td>***</td><td>***</td></tr>
+<tr><td>Azedo-Extra</td><td>11,82</td><td>+8,34</td></tr>
+<tr><td>Doce (T 06-15)</td><td>18,33</td><td>0,00</td></tr>
+<tr><td>Ceagesp/SP</td><td>***</td><td>***</td></tr>
+<tr>
+  <td>Azedo 4A</td>
+  <td>${ceagesp}</td>
+  <td>0,00</td>
+</tr>
+<tr><td>Doce (10 a 15 frutos)</td><td>16,47</td><td>0,00</td></tr>
+</tbody></table></div></div>`;
+
+describe("lerMaracujaCeasa", () => {
+  it("pega o azedo da Ceagesp em cada dia, ignorando as outras centrais", () => {
+    expect(lerMaracujaCeasa(diaMaracuja("16/10/2026", "9,34") + diaMaracuja("15/10/2026", "10,26"))).toEqual([
+      { data: "2026-10-16", valor: 9.34 },
+      { data: "2026-10-15", valor: 10.26 },
+    ]);
+  });
+  it("lê outra central quando pedido e acusa layout desconhecido", () => {
+    expect(lerMaracujaCeasa(diaMaracuja("16/10/2026", "9,34"), "Ceasa Campinas/SP")).toEqual([{ data: "2026-10-16", valor: 11.82 }]);
+    expect(() => lerMaracujaCeasa("<html></html>")).toThrow(/Maracujá/);
   });
 });
 
