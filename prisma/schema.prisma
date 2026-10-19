@@ -45,12 +45,13 @@ model Conta {
   ativa     Boolean  @default(true)
   criadoEm  DateTime @default(now())
 
-  apelidos ContaApelido[]
-  partidas Partida[]
-  titulos  Titulo[]            @relation("contaDoTitulo")
-  baixas   Titulo[]            @relation("contaDaBaixa")
-  extratos ImportacaoExtrato[] @relation("contaDoExtrato")
-  vendas   Venda[]             @relation("contaDaVenda")
+  apelidos     ContaApelido[]
+  partidas     Partida[]
+  titulos      Titulo[]            @relation("contaDoTitulo")
+  baixas       Titulo[]            @relation("contaDaBaixa")
+  extratos     ImportacaoExtrato[] @relation("contaDoExtrato")
+  vendas       Venda[]             @relation("contaDaVenda")
+  apontamentos Apontamento[]       @relation("contaDoApontamento")
 }
 
 // Grafias antigas com que a conta aparece na planilha ("cc acm", "CC ACM"…),
@@ -67,7 +68,7 @@ model Lancamento {
   id        String   @id @default(cuid())
   data      DateTime @db.Date
   historico String?
-  origem    String // "PLANILHA" | "MANUAL" | "DOCUMENTO" | "TITULO" | "EXTRATO" | "IMPORTACAO"
+  origem    String // "PLANILHA" | "MANUAL" | "DOCUMENTO" | "TITULO" | "EXTRATO" | "IMPORTACAO" | "MAO_DE_OBRA"
 
   // Rastro da linha de origem na planilha Gerencial Financeiro (origem = PLANILHA)
   linhaPlanilhaInicio Int?
@@ -80,9 +81,10 @@ model Lancamento {
   atualizadoPor   Usuario? @relation("atualizadoPor", fields: [atualizadoPorId], references: [id])
   atualizadoEm    DateTime @updatedAt
 
-  partidas Partida[]
-  titulo   Titulo?
-  anexos   Anexo[]
+  partidas            Partida[]
+  titulo              Titulo?
+  anexos              Anexo[]
+  fechamentoMaoDeObra FechamentoMaoDeObra?
 
   @@index([data])
   @@index([origem])
@@ -264,6 +266,58 @@ model Venda {
   titulos  Titulo[]
 
   @@index([atividade, dataContrato])
+}
+
+// Mão de obra: equipe (funcionários, diaristas, empreita), apontamentos do
+// dia a dia e fechamentos. O fechamento soma os apontamentos ainda não pagos de
+// um período e gera um lançamento (custeio de cada atividade × conta que pagou).
+model Trabalhador {
+  id                   String   @id @default(cuid())
+  nome                 String
+  tipo                 String // "DIARISTA" | "FUNCIONARIO" | "EMPREITA"
+  diariaCentavos       Int? // valor padrão do dia
+  precoUnidadeCentavos Int? // valor padrão por lata/caixa colhida
+  ativo                Boolean  @default(true)
+  observacao           String?
+  criadoEm             DateTime @default(now())
+
+  apontamentos Apontamento[]
+}
+
+model Apontamento {
+  id            String               @id @default(cuid())
+  trabalhadorId String
+  trabalhador   Trabalhador          @relation(fields: [trabalhadorId], references: [id])
+  data          DateTime             @db.Date
+  atividade     String // "CAFE" | "MARACUJA" | "MILHO" | "PECUARIA" | "GERAL"
+  servico       String // colheita, capina, desbrota, adubação...
+  dias          Float // 1 = dia inteiro, 0,5 = meio dia
+  quantidade    Float? // colhido (latas, caixas...), quando por produção
+  valorCentavos Int // dias × diária + quantidade × preço (editável)
+  contaId       String // conta de custeio onde o custo entra
+  conta         Conta                @relation("contaDoApontamento", fields: [contaId], references: [id])
+  fechamentoId  String? // preenchido quando pago (fechado)
+  fechamento    FechamentoMaoDeObra? @relation(fields: [fechamentoId], references: [id], onDelete: SetNull)
+  criadoPorId   String?
+  criadoEm      DateTime             @default(now())
+
+  @@index([data])
+  @@index([fechamentoId])
+  @@index([trabalhadorId, data])
+}
+
+model FechamentoMaoDeObra {
+  id               String        @id @default(cuid())
+  inicio           DateTime      @db.Date
+  fim              DateTime      @db.Date
+  dataPagamento    DateTime      @db.Date
+  contaPagamentoId String
+  totalCentavos    Int
+  lancamentoId     String        @unique
+  lancamento       Lancamento    @relation(fields: [lancamentoId], references: [id], onDelete: Cascade) // excluir o lançamento desfaz o fechamento
+  criadoPorId      String?
+  criadoEm         DateTime      @default(now())
+  apontamentos     Apontamento[]
 }
 
 // Cronograma de produção: tarefas por atividade e ano, com checklist.
