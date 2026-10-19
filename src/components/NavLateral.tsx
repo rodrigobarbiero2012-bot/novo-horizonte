@@ -37,8 +37,7 @@ const ITENS: Item[] = [
   {
     grupo: "Operação",
     itens: [
-      { href: "/producao", rotulo: "Produção" },
-      { href: "/vendas", rotulo: "Vendas" },
+      { href: "/producao", rotulo: "Produção e vendas" },
       { href: "/mao-de-obra", rotulo: "Mão de obra" },
       { href: "/cronograma", rotulo: "Cronograma" },
     ],

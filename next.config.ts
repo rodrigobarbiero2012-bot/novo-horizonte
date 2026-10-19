@@ -14,6 +14,14 @@ const nextConfig: NextConfig = {
       // "Cronograma" no menu é só o título do grupo; o endereço sem atividade abre o café.
       { source: "/cronograma", destination: "/cronograma/cafe", permanent: false },
       { source: "/producao", destination: "/producao/cafe", permanent: false },
+      // Vendas virou uma aba de "Produção e vendas".
+      {
+        source: "/vendas",
+        has: [{ type: "query", key: "atividade", value: "(?<atividade>cafe|maracuja|milho|pecuaria)" }],
+        destination: "/producao/:atividade?aba=vendas",
+        permanent: false,
+      },
+      { source: "/vendas", destination: "/producao/cafe?aba=vendas", permanent: false },
     ];
   },
   partialPrefetching: true,

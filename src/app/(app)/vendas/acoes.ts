@@ -15,7 +15,6 @@ const texto = (form: FormData, campo: string) => String(form.get(campo) ?? "").t
 const dataOpcional = (v: string) => (v ? (ehDataIso(v) ? new Date(v) : undefined) : null); // undefined = inválida
 
 function revalidar() {
-  revalidatePath("/vendas");
   revalidatePath("/a-pagar-receber");
   revalidatePath("/producao", "layout");
   revalidatePath("/");
