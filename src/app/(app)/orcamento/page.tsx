@@ -7,12 +7,16 @@ import { partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { MESES, reaisCurto } from "@/lib/formato";
 import {
+  chaveInvestimento,
   comparar,
+  ehLinhaInvestimento,
   ehLinhaOrcamento,
   matrizVazia,
   mesDeCorte,
+  realizadoInvestimentos,
   realizadoMensal,
   somaAte,
+  somaLinhas,
   totaisMensais,
   type Comparacao,
   type Matriz,
@@ -23,7 +27,7 @@ import { hojeSP } from "@/lib/hoje";
 
 export const metadata: Metadata = { title: "Orçamento × realizado" };
 
-const GRUPOS: (GrupoEditor & { total: { chave: Total; rotulo: string } | null })[] = [
+const GRUPOS: { rotulo: string; linhas: { chave: LinhaDre; rotulo: string }[]; total: { chave: Total; rotulo: string } | null }[] = [
   {
     rotulo: "Receita operacional",
     linhas: [
@@ -77,10 +81,11 @@ async function Conteudo({ searchParams }: PageProps<"/orcamento">) {
   const pedidoAte = Number(params.ate);
   const ate = Number.isInteger(pedidoAte) && pedidoAte >= 1 && pedidoAte <= 12 ? pedidoAte : mesDeCorte(ano, hoje);
 
-  const [partidas, itens, anosComOrcamento] = await Promise.all([
+  const [partidas, itens, anosComOrcamento, contasImobilizado] = await Promise.all([
     partidasDoRazao(),
     prisma.orcamentoItem.findMany({ where: { ano } }),
     prisma.orcamentoItem.findMany({ distinct: ["ano"], select: { ano: true }, orderBy: { ano: "asc" } }),
+    prisma.conta.findMany({ where: { categoria: "Ativo Imobilizado", ativa: true }, orderBy: { nome: "asc" }, select: { nome: true } }),
   ]);
   const orcado: Matriz = matrizVazia();
   for (const i of itens) if (ehLinhaOrcamento(i.linha)) orcado[i.linha][i.mes - 1] = i.valorCentavos;
@@ -89,6 +94,20 @@ async function Conteudo({ searchParams }: PageProps<"/orcamento">) {
   const totOrc = totaisMensais(orcado);
   const totReal = totaisMensais(realizado);
   const temOrcamento = itens.length > 0;
+
+  // Investimentos (compra de imobilizado): uma linha por conta, fora do resultado.
+  const nomesImobilizado = contasImobilizado.map((c) => c.nome);
+  const linhasInvestimento = nomesImobilizado.map((n) => ({ chave: chaveInvestimento(n), rotulo: n.replace(/^Imobilizado - /, "") }));
+  const orcadoInv: Record<string, number[]> = Object.fromEntries(linhasInvestimento.map((l) => [l.chave, Array(12).fill(0)]));
+  for (const i of itens) if (ehLinhaInvestimento(i.linha) && orcadoInv[i.linha]) orcadoInv[i.linha][i.mes - 1] = i.valorCentavos;
+  const realizadoInv = realizadoInvestimentos(partidas, ano, nomesImobilizado);
+  const anteriorInv = realizadoInvestimentos(partidas, ano - 1, nomesImobilizado);
+  const chavesInv = linhasInvestimento.map((l) => l.chave);
+  const totInvOrc = somaLinhas(orcadoInv, chavesInv);
+  const totInvReal = somaLinhas(realizadoInv, chavesInv);
+  const linhaInv = (o: number[], r: number[]) => ({ ano: somaAte(o, 12), ...comparar(somaAte(o, ate), somaAte(r, ate)) });
+  const investimentos = linhaInv(totInvOrc, totInvReal);
+  const gruposEditor: GrupoEditor[] = [...GRUPOS, { rotulo: "Investimentos (imobilizado)", linhas: linhasInvestimento }];
 
   const linha = (chave: LinhaDre | Total) => {
     const o = chave in orcado ? orcado[chave as LinhaDre] : totOrc[chave as Total];
@@ -129,10 +148,16 @@ async function Conteudo({ searchParams }: PageProps<"/orcamento">) {
         </Cartao>
       ) : (
         <>
-          <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Resumo rotulo="Receita" c={receita} anual={receita.ano} />
             <Resumo rotulo="Custeio + despesas" c={{ ...gastos, orcado: -gastos.orcado, realizado: -gastos.realizado }} anual={-gastosOrcAno} gasto />
             <Resumo rotulo="Resultado" c={resultado} anual={resultado.ano} />
+            <Resumo
+              rotulo="Investimentos"
+              c={{ ...investimentos, orcado: -investimentos.orcado, realizado: -investimentos.realizado }}
+              anual={-investimentos.ano}
+              gasto
+            />
           </div>
 
           <Cartao className="mb-6 overflow-x-auto">
@@ -155,6 +180,12 @@ async function Conteudo({ searchParams }: PageProps<"/orcamento">) {
                   g.total && <LinhaComparacao key={g.total.chave} rotulo={g.total.rotulo} d={linha(g.total.chave)} estilo="total" />,
                 ])}
                 <LinhaComparacao rotulo="Resultado do período" d={resultado} estilo="destaque" />
+                {/* Investimentos: compra de bens (viram ativo), por isso fora do resultado. */}
+                <LinhaSecao rotulo="Investimentos (imobilizado)" colunas={6} />
+                {linhasInvestimento.map((l) => (
+                  <LinhaComparacao key={l.chave} rotulo={l.rotulo} d={linhaInv(orcadoInv[l.chave], realizadoInv[l.chave] ?? Array(12).fill(0))} />
+                ))}
+                <LinhaComparacao rotulo="Total investimentos" d={investimentos} estilo="total" />
               </tbody>
             </table>
           </Cartao>
@@ -200,6 +231,22 @@ async function Conteudo({ searchParams }: PageProps<"/orcamento">) {
                         ))}
                       </tr>,
                     ])}
+                    <tr className="border-t border-stone-100 text-stone-500">
+                      <td className="sticky left-0 whitespace-nowrap bg-white px-3 pt-2">Investimentos orçados</td>
+                      {totInvOrc.map((v, i) => (
+                        <td key={i} className="num px-2 pt-2">
+                          {reaisCurto(v)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="font-medium">
+                      <td className="sticky left-0 whitespace-nowrap bg-white px-3 pb-2">Investimentos realizados</td>
+                      {totInvReal.map((v, i) => (
+                        <td key={i} className={`num px-2 pb-2 ${i >= ate ? "text-stone-300" : corDesvio(v - totInvOrc[i])}`}>
+                          {i >= ate && v === 0 ? "" : reaisCurto(v)}
+                        </td>
+                      ))}
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -212,7 +259,13 @@ async function Conteudo({ searchParams }: PageProps<"/orcamento">) {
         <details open={!temOrcamento}>
           <summary className="cursor-pointer font-semibold text-stone-800">{temOrcamento ? `Editar orçamento de ${ano}` : `Orçamento de ${ano}`}</summary>
           <div className="mt-4">
-            <EditorOrcamento key={`${ano}-${itens.length}`} ano={ano} inicial={orcado} anoAnterior={anterior} grupos={GRUPOS} />
+            <EditorOrcamento
+              key={`${ano}-${itens.length}`}
+              ano={ano}
+              inicial={{ ...orcado, ...orcadoInv }}
+              anoAnterior={{ ...anterior, ...anteriorInv }}
+              grupos={gruposEditor}
+            />
           </div>
         </details>
       </Cartao>

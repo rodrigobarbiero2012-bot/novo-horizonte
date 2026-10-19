@@ -56,10 +56,39 @@ export function distribuir(total: number): number[] {
 }
 
 /** Matriz multiplicada por (1 + pct/100), arredondada ao real inteiro. */
-export function ajustar(m: Matriz, pct: number): Matriz {
+export function ajustar<M extends Record<string, number[]>>(m: M, pct: number): M {
   const fator = 1 + pct / 100;
-  return Object.fromEntries(LINHAS_ORCAMENTO.map((l) => [l, m[l].map((v) => Math.round((v * fator) / 100) * 100)])) as Matriz;
+  return Object.fromEntries(Object.entries(m).map(([l, v]) => [l, v.map((x) => Math.round((x * fator) / 100) * 100)])) as M;
 }
+
+// Investimentos (compra de imobilizado: máquinas, prédios, veículos, lavoura).
+// Não passam pela DRE — viram ativo —, então ficam em linhas próprias do
+// orçamento, uma por conta de imobilizado: "inv:<nome da conta>". Guardados
+// negativos (saída de dinheiro), como os gastos: desvio positivo = gastou menos.
+
+export const PREFIXO_INVESTIMENTO = "inv:";
+export const chaveInvestimento = (nomeConta: string) => `${PREFIXO_INVESTIMENTO}${nomeConta}`;
+export const ehLinhaInvestimento = (l: string) => l.startsWith(PREFIXO_INVESTIMENTO);
+export const contaDaLinha = (l: string) => l.slice(PREFIXO_INVESTIMENTO.length);
+
+/** Sinal de digitação de qualquer linha do orçamento (investimento: digitado positivo, guardado negativo). */
+export const sinalDaLinha = (l: string): 1 | -1 => (ehLinhaInvestimento(l) ? -1 : ehLinhaOrcamento(l) ? SINAL[l] : 1);
+
+/** Compras de imobilizado no ano, por conta e mês (aquisições: partidas a débito), negativas. */
+export function realizadoInvestimentos(partidas: PartidaContabil[], ano: number, contas: string[]): Record<string, number[]> {
+  const m: Record<string, number[]> = Object.fromEntries(contas.map((c) => [chaveInvestimento(c), Array(12).fill(0)]));
+  const prefixo = `${ano}-`;
+  for (const p of partidas) {
+    if (p.categoria !== "Ativo Imobilizado" || p.valorCentavos <= 0 || !p.conta || !p.data.startsWith(prefixo)) continue;
+    const chave = chaveInvestimento(p.conta);
+    (m[chave] ??= Array(12).fill(0))[Number(p.data.slice(5, 7)) - 1] -= p.valorCentavos;
+  }
+  return m;
+}
+
+/** Soma mês a mês de várias linhas. */
+export const somaLinhas = (m: Record<string, number[]>, linhas: string[]) =>
+  Array.from({ length: 12 }, (_, i) => linhas.reduce((s, l) => s + (m[l]?.[i] ?? 0), 0));
 
 /** Último mês fechado ou em andamento para comparar: ano passado → 12; ano futuro → 0. */
 export function mesDeCorte(ano: number, hoje: string): number {

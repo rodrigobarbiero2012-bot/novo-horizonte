@@ -50,6 +50,7 @@ model Conta {
   titulos  Titulo[]            @relation("contaDoTitulo")
   baixas   Titulo[]            @relation("contaDaBaixa")
   extratos ImportacaoExtrato[] @relation("contaDoExtrato")
+  vendas   Venda[]             @relation("contaDaVenda")
 }
 
 // Grafias antigas com que a conta aparece na planilha ("cc acm", "CC ACM"…),
@@ -127,30 +128,34 @@ model Cotacao {
 // Contas a pagar e a receber. A baixa (pagamento/recebimento) gera um
 // Lancamento: débito/crédito na conta do título contra a conta de pagamento.
 model Titulo {
-  id                 String      @id @default(cuid())
+  id                 String             @id @default(cuid())
   tipo               String // "PAGAR" | "RECEBER"
   descricao          String
   contraparte        String? // fornecedor (pagar) ou cliente (receber)
   valorCentavos      Int // sempre positivo
-  vencimento         DateTime    @db.Date
+  vencimento         DateTime           @db.Date
   contaId            String // despesa/custeio/ativo/passivo (pagar) ou receita (receber)
-  conta              Conta       @relation("contaDoTitulo", fields: [contaId], references: [id])
+  conta              Conta              @relation("contaDoTitulo", fields: [contaId], references: [id])
   numeroDocumento    String?
   linhaDigitavel     String?
   grupoParcelasId    String? // mesmo valor em todas as parcelas de um parcelamento
   parcela            Int?
   totalParcelas      Int?
-  status             String      @default("ABERTO") // "ABERTO" | "BAIXADO" | "CANCELADO"
-  baixadoEm          DateTime?   @db.Date
+  status             String             @default("ABERTO") // "ABERTO" | "BAIXADO" | "CANCELADO"
+  baixadoEm          DateTime?          @db.Date
   valorBaixaCentavos Int?
   contaBaixaId       String?
-  contaBaixa         Conta?      @relation("contaDaBaixa", fields: [contaBaixaId], references: [id])
-  lancamentoId       String?     @unique
-  lancamento         Lancamento? @relation(fields: [lancamentoId], references: [id])
-  origem             String      @default("MANUAL") // "MANUAL" | "DOCUMENTO"
+  contaBaixa         Conta?             @relation("contaDaBaixa", fields: [contaBaixaId], references: [id])
+  lancamentoId       String?            @unique
+  lancamento         Lancamento?        @relation(fields: [lancamentoId], references: [id])
+  origem             String             @default("MANUAL") // "MANUAL" | "DOCUMENTO"
   criadoPorId        String?
-  criadoEm           DateTime    @default(now())
+  criadoEm           DateTime           @default(now())
   anexos             Anexo[]
+  vendaId            String? // conta a receber gerada pela entrega de uma venda
+  venda              Venda?             @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  entregaId          String?            @unique // a entrega (movimento de produção) que este título cobra
+  entrega            MovimentoProducao? @relation("tituloDaEntrega", fields: [entregaId], references: [id], onDelete: SetNull)
 
   @@index([status, vencimento])
   @@index([grupoParcelasId])
@@ -224,10 +229,41 @@ model MovimentoProducao {
   talhao        Talhao?  @relation(fields: [talhaoId], references: [id], onDelete: SetNull)
   valorCentavos Int? // valor da venda/compra, quando houver
   observacao    String?
+  vendaId       String? // entrega de um contrato de venda (ver Venda); valor null = preço ainda não fixado
+  venda         Venda?   @relation(fields: [vendaId], references: [id], onDelete: SetNull)
+  titulo        Titulo?  @relation("tituloDaEntrega")
   criadoPorId   String?
   criadoEm      DateTime @default(now())
 
   @@index([atividade, data])
+  @@index([vendaId])
+}
+
+// Venda (contrato) de produção: café, maracujá, milho ou gado. Pode ser à vista,
+// para entrega futura ou com preço a fixar. Cada entrega é um MovimentoProducao
+// (VENDA) ligado à venda + uma conta a receber; o entregue é sempre a soma das
+// entregas (não fica guardado), então excluir uma entrega já atualiza o contrato.
+model Venda {
+  id                    String    @id @default(cuid())
+  atividade             String // "CAFE" | "MARACUJA" | "MILHO" | "PECUARIA"
+  comprador             String
+  dataContrato          DateTime  @db.Date
+  quantidade            Float // na unidade da atividade (sacas, kg, cabeças)
+  precoUnitarioCentavos Int? // null = preço a fixar
+  modalidade            String // "PRONTA" | "FUTURA" | "A_FIXAR"
+  entregaPrevista       DateTime? @db.Date
+  pagamentoPrevisto     DateTime? @db.Date
+  contaReceitaId        String // conta de receita usada nas contas a receber das entregas
+  contaReceita          Conta     @relation("contaDaVenda", fields: [contaReceitaId], references: [id])
+  observacao            String?
+  cancelada             Boolean   @default(false)
+  criadoPorId           String?
+  criadoEm              DateTime  @default(now())
+
+  entregas MovimentoProducao[]
+  titulos  Titulo[]
+
+  @@index([atividade, dataContrato])
 }
 
 // Cronograma de produção: tarefas por atividade e ano, com checklist.

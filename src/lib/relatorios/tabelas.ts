@@ -86,8 +86,17 @@ const ROTULOS_ORCAMENTO: Record<LinhaDre, string> = Object.fromEntries(
   (Object.keys(LINHAS_DRE) as LinhaDre[]).map((l) => [l, LINHAS_DRE[l].rotulo]),
 ) as Record<LinhaDre, string>;
 
+/** Soma mês a mês de várias séries de 12 meses. */
+const somaMeses = (series: number[][]) => Array.from({ length: 12 }, (_, m) => series.reduce((s, v) => s + v[m], 0));
+
 /** Orçamento × realizado do ano, acumulado até o mês `ate`. */
-export function relatorioOrcamento(ano: number, ate: number, orcado: Matriz, realizado: Matriz): Relatorio {
+export function relatorioOrcamento(
+  ano: number,
+  ate: number,
+  orcado: Matriz,
+  realizado: Matriz,
+  investimentos: { rotulo: string; orcado: number[]; realizado: number[] }[] = [],
+): Relatorio {
   const totOrc = totaisMensais(orcado);
   const totReal = totaisMensais(realizado);
   const linha = (rotulo: string, o: number[], r: number[], e: EstiloLinha = "valor") => {
@@ -118,6 +127,13 @@ export function relatorioOrcamento(ano: number, ate: number, orcado: Matriz, rea
       total("Total despesas", "totalDespesas"),
       valor("resultadoNaoOperacional"),
       total("Resultado do período", "resultado", "destaque"),
+      ...(investimentos.length
+        ? [
+            secao("Investimentos (imobilizado)"),
+            ...investimentos.map((i) => linha(i.rotulo, i.orcado, i.realizado)),
+            linha("Total investimentos", somaMeses(investimentos.map((i) => i.orcado)), somaMeses(investimentos.map((i) => i.realizado)), "total"),
+          ]
+        : []),
     ],
   };
 }

@@ -129,14 +129,29 @@ export function FormMovimento({
 }
 
 /** Botão pequeno de ação em linha (excluir, desativar), com confirmação. */
-export function BotaoLinha({ acao, confirmacao, children, perigo = false }: { acao: () => Promise<void>; confirmacao?: string; children: React.ReactNode; perigo?: boolean }) {
+/** Botão de ação numa linha de tabela. Se a ação devolver um texto, é um aviso de que não foi feita. */
+export function BotaoLinha({
+  acao,
+  confirmacao,
+  children,
+  perigo = false,
+}: {
+  acao: () => Promise<string | undefined | void>;
+  confirmacao?: string;
+  children: React.ReactNode;
+  perigo?: boolean;
+}) {
   const [pendente, iniciar] = useTransition();
   return (
     <button
       type="button"
       disabled={pendente}
       onClick={() => {
-        if (!confirmacao || confirm(confirmacao)) iniciar(() => acao());
+        if (!confirmacao || confirm(confirmacao))
+          iniciar(async () => {
+            const aviso = await acao();
+            if (aviso) alert(aviso);
+          });
       }}
       className={`text-xs hover:underline disabled:opacity-50 ${perigo ? "text-stone-400 hover:text-red-700" : "text-folha-700"}`}
     >

@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { filtroLancamentos } from "@/lib/lancamentos/filtro";
-import { ehLinhaOrcamento, matrizVazia, mesDeCorte, realizadoMensal } from "@/lib/orcamento/calculo";
+import { chaveInvestimento, ehLinhaOrcamento, matrizVazia, mesDeCorte, realizadoInvestimentos, realizadoMensal } from "@/lib/orcamento/calculo";
 import { montarBackup } from "@/lib/relatorios/backup";
 import { listaParaExcel, listasParaExcel, modeloImportacao, relatorioParaExcel } from "@/lib/relatorios/excel";
 import { relatorioBalanco, relatorioDre, relatorioFluxo, relatorioOrcamento } from "@/lib/relatorios/tabelas";
@@ -55,10 +55,24 @@ export async function GET(request: Request, { params }: RouteContext<"/api/expor
       const ano = Number.isInteger(pedido) && pedido >= 2015 && pedido <= anoAtual + 5 ? pedido : anoAtual;
       const pedidoAte = Number(sp.ate);
       const ate = Number.isInteger(pedidoAte) && pedidoAte >= 1 && pedidoAte <= 12 ? pedidoAte : mesDeCorte(ano, hoje);
-      const [partidas, itens] = await Promise.all([partidasDoRazao(), prisma.orcamentoItem.findMany({ where: { ano } })]);
+      const [partidas, itens, imobilizado] = await Promise.all([
+        partidasDoRazao(),
+        prisma.orcamentoItem.findMany({ where: { ano } }),
+        prisma.conta.findMany({ where: { categoria: "Ativo Imobilizado", ativa: true }, orderBy: { nome: "asc" }, select: { nome: true } }),
+      ]);
       const orcado = matrizVazia();
       for (const i of itens) if (ehLinhaOrcamento(i.linha)) orcado[i.linha][i.mes - 1] = i.valorCentavos;
-      return arquivo(await relatorioParaExcel(relatorioOrcamento(ano, ate, orcado, realizadoMensal(partidas, ano))), `Orçamento x realizado ${ano}.xlsx`);
+      const realizadoInv = realizadoInvestimentos(partidas, ano, imobilizado.map((c) => c.nome));
+      const investimentos = imobilizado.map((c) => {
+        const chave = chaveInvestimento(c.nome);
+        const o = Array(12).fill(0) as number[];
+        for (const i of itens) if (i.linha === chave) o[i.mes - 1] = i.valorCentavos;
+        return { rotulo: c.nome.replace(/^Imobilizado - /, ""), orcado: o, realizado: realizadoInv[chave] };
+      });
+      return arquivo(
+        await relatorioParaExcel(relatorioOrcamento(ano, ate, orcado, realizadoMensal(partidas, ano), investimentos)),
+        `Orçamento x realizado ${ano}.xlsx`,
+      );
     }
     case "lancamentos": {
       const { filtro, orderBy, temFiltro } = filtroLancamentos(sp);

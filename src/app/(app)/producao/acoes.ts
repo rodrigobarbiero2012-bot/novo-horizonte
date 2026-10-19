@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { lerValorBr } from "@/lib/contabil/lancamento";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type TipoMovimento } from "@/lib/producao/atividades";
 import { exigirUsuario } from "@/lib/usuario";
+import { desfazerEntregaTx } from "@/lib/vendas/entregas";
 import { ehDataIso, ehId, lerNumeroBr } from "@/lib/validacao";
 
 export type EstadoProducao = { erro?: string; ok?: string } | undefined;
@@ -90,12 +91,14 @@ export async function registrarMovimento(slug: string, _: EstadoProducao, form: 
   return { ok: `${def.tipos.find((t) => t.tipo === tipo)!.rotulo} de ${quantidade.toLocaleString("pt-BR")} ${def.unidadeCurta} registrada.` };
 }
 
-export async function excluirMovimento(slug: string, id: string) {
+export async function excluirMovimento(slug: string, id: string): Promise<string | undefined> {
   const usuario = await exigirUsuario();
   if (!ehId(id)) return;
   const m = await prisma.movimentoProducao.findUnique({ where: { id } });
   if (!m) return;
-  await prisma.movimentoProducao.delete({ where: { id } });
+  // Entrega de uma venda: leva junto a conta a receber (e recusa se já foi recebida).
+  const erro = await prisma.$transaction((tx) => desfazerEntregaTx(tx, id));
+  if (erro) return erro;
   await auditar(usuario.id, "MovimentoProducao", id, "EXCLUIR", { tipo: m.tipo, quantidade: m.quantidade, data: m.data.toISOString().slice(0, 10) });
   revalidar(slug);
 }

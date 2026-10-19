@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dreAnual } from "../contabil/relatorios";
 import type { PartidaContabil } from "../contabil/tipos";
-import { ajustar, comparar, distribuir, matrizVazia, mesDeCorte, realizadoMensal, SINAL, somaAte, totaisMensais } from "./calculo";
+import { ajustar, chaveInvestimento, comparar, distribuir, matrizVazia, mesDeCorte, realizadoInvestimentos, realizadoMensal, SINAL, sinalDaLinha, somaAte, somaLinhas, totaisMensais } from "./calculo";
 
 const p = (data: string, categoria: PartidaContabil["categoria"], atividade: PartidaContabil["atividade"], reais: number) =>
   ({ data, categoria, atividade, valorCentavos: Math.round(reais * 100) }) satisfies PartidaContabil;
@@ -71,3 +71,21 @@ describe("mesDeCorte", () => {
     expect(mesDeCorte(2027, "2026-10-18")).toBe(0);
   });
 });
+
+describe("investimentos", () => {
+  it("compras de imobilizado por conta e mês, negativas; vendas (créditos) não contam", () => {
+    const partidas = [
+      { data: "2026-03-10", categoria: "Ativo Imobilizado" as const, atividade: "N/A" as const, valorCentavos: 12_000_000, conta: "Imobilizado - Máquinas e Equipamentos" },
+      { data: "2026-03-10", categoria: "PL Capital Sócio" as const, atividade: "N/A" as const, valorCentavos: -12_000_000, conta: "CC ACM" },
+      { data: "2026-07-01", categoria: "Ativo Imobilizado" as const, atividade: "N/A" as const, valorCentavos: -2_000_000, conta: "Imobilizado - Veículos" }, // venda
+      { data: "2025-12-01", categoria: "Ativo Imobilizado" as const, atividade: "N/A" as const, valorCentavos: 999, conta: "Imobilizado - Prédios" },
+    ];
+    const m = realizadoInvestimentos(partidas, 2026, ["Imobilizado - Máquinas e Equipamentos", "Imobilizado - Veículos"]);
+    expect(m[chaveInvestimento("Imobilizado - Máquinas e Equipamentos")][2]).toBe(-12_000_000);
+    expect(somaAte(m[chaveInvestimento("Imobilizado - Veículos")], 12)).toBe(0);
+    expect(somaAte(somaLinhas(m, Object.keys(m)), 12)).toBe(-12_000_000);
+    expect(sinalDaLinha(chaveInvestimento("x"))).toBe(-1);
+    expect(sinalDaLinha("receitaCafe")).toBe(1);
+  });
+});
+
