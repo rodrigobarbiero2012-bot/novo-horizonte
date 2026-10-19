@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Pagina } from "@/components/Pagina";
@@ -63,7 +64,7 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
   });
 
   const movimentosDoAno = movimentos.filter((m) => m.data.getUTCFullYear() === ano);
-  const rotuloTipo = (t: string) => def.tipos.find((x) => x.tipo === t)?.rotulo ?? t;
+  const rotuloTipo = (t: string) => (t === "VENDA" ? "Venda" : (def.tipos.find((x) => x.tipo === t)?.rotulo ?? t));
   const u = def.unidadeCurta;
   const reaisPorUnidade = (c: number | null) => (c === null ? "—" : `R$ ${reais(c)}`);
   const anos = Array.from({ length: 4 }, (_, i) => anoAtual - 3 + i);
@@ -123,7 +124,14 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
 
       <div className="mb-6 grid gap-6 xl:grid-cols-2">
         <Cartao className="p-5">
-          <h2 className="mb-3 font-semibold text-stone-800">Registrar movimento</h2>
+          <h2 className="mb-1 font-semibold text-stone-800">Registrar movimento</h2>
+          <p className="mb-3 text-xs text-stone-500">
+            Vendas não entram aqui: registre em{" "}
+            <Link href={`/vendas?atividade=${slug}`} className="text-folha-700 hover:underline">
+              Operação → Vendas
+            </Link>
+            , que dá a saída do estoque e cria a conta a receber.
+          </p>
           <FormMovimento acao={registrarMovimento.bind(null, slug)} tipos={def.tipos} talhoes={talhoes.filter((t) => t.ativo).map(({ id, nome }) => ({ id, nome }))} unidade={u} />
         </Cartao>
         <Cartao className="p-5">
@@ -192,9 +200,16 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
                       {m.observacao}
                     </td>
                     <td className="py-1.5 text-right">
-                      <BotaoLinha perigo acao={excluirMovimento.bind(null, slug, m.id)} confirmacao="Excluir este movimento?">
-                        excluir
-                      </BotaoLinha>
+                      {m.vendaId || m.tipo === "VENDA" ? (
+                        // Entrega de venda: corrige-se em Vendas (desfazer a entrega também cuida da conta a receber).
+                        <Link href={`/vendas?atividade=${slug}`} className="text-xs text-folha-700 hover:underline">
+                          via Vendas
+                        </Link>
+                      ) : (
+                        <BotaoLinha perigo acao={excluirMovimento.bind(null, slug, m.id)} confirmacao="Excluir este movimento?">
+                          excluir
+                        </BotaoLinha>
+                      )}
                     </td>
                   </tr>
                 );

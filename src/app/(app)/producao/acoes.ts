@@ -96,6 +96,7 @@ export async function excluirMovimento(slug: string, id: string): Promise<string
   if (!ehId(id)) return;
   const m = await prisma.movimentoProducao.findUnique({ where: { id } });
   if (!m) return;
+  if (m.vendaId) return "Esta saída é a entrega de uma venda: desfaça em Operação → Vendas.";
   // Entrega de uma venda: leva junto a conta a receber (e recusa se já foi recebida).
   const erro = await prisma.$transaction((tx) => desfazerEntregaTx(tx, id));
   if (erro) return erro;

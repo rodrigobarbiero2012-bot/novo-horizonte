@@ -33,9 +33,11 @@ type DefAtividade = {
   rotuloArea: string;
 };
 
+// Tipos que o sócio registra à mão na Produção. VENDA não entra: venda se
+// registra em Vendas, que gera o movimento (a entrega) — assim a mesma venda
+// não é lançada duas vezes.
 const LAVOURA = (rotuloConsumo: string) => [
   { tipo: "COLHEITA" as const, rotulo: "Colheita" },
-  { tipo: "VENDA" as const, rotulo: "Venda" },
   { tipo: "CONSUMO" as const, rotulo: rotuloConsumo },
   { tipo: "PERDA" as const, rotulo: "Perda / quebra" },
   { tipo: "AJUSTE" as const, rotulo: "Ajuste de inventário (±)" },
@@ -92,7 +94,6 @@ export const ATIVIDADES_PRODUCAO = {
     tipos: [
       { tipo: "NASCIMENTO", rotulo: "Nascimento" },
       { tipo: "COMPRA", rotulo: "Compra" },
-      { tipo: "VENDA", rotulo: "Venda" },
       { tipo: "MORTE", rotulo: "Morte" },
       { tipo: "CONSUMO", rotulo: "Abate para consumo" },
       { tipo: "AJUSTE", rotulo: "Ajuste de contagem (±)" },
