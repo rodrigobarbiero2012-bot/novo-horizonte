@@ -38,6 +38,7 @@ const ITENS: Item[] = [
     ],
   },
   { href: "/contas", rotulo: "Plano de contas" },
+  { href: "/lembretes", rotulo: "Lembretes por e-mail" },
   { href: "/convites", rotulo: "Convidar sócio" }, // temporário
 ];
 
