@@ -35,7 +35,7 @@ const ITENS: Item[] = [
     ],
   },
   {
-    grupo: "Campo",
+    grupo: "Operação",
     itens: [
       { href: "/producao", rotulo: "Produção" },
       { href: "/vendas", rotulo: "Vendas" },
