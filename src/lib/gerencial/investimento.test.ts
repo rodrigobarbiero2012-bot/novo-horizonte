@@ -72,11 +72,11 @@ describe("resumirCultivo", () => {
     expect(r.tir).toBeCloseTo(0.1, 6); // −100, depois 10 + 100
   });
 
-  it("com valor de mercado: substitui o capital contábil e entra no início e no fim", () => {
-    const r = resumirCultivo([ano(2025, 50, 0, 400)], 1000)!;
-    expect(r.capitalHoje).toBe(1000);
-    expect(r.retornoRecente).toBeCloseTo(0.05, 6);
-    expect(r.tir).toBeCloseTo(0.05, 6); // −1000, depois 50 + 1000
+  it("com valor de mercado: começa no investido e termina a mercado (valorização entra)", () => {
+    const r = resumirCultivo([ano(2024, 0, 100, 100), ano(2025, 10, 0, 100)], 210)!;
+    expect(r.capitalHoje).toBe(210);
+    expect(r.retornoRecente).toBeCloseTo(5 / 210, 6);
+    expect(r.tir).toBeCloseTo(1.2, 6); // −100, depois 10 + 210 (o bem de 100 vale 210)
   });
 });
 

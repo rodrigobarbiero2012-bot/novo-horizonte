@@ -89,6 +89,8 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
     prisma.movimentoProducao.groupBy({ by: ["atividade"], where: { tipo: { in: ["COLHEITA", "NASCIMENTO"] } }, _count: true }),
   ]);
   const anosAnalise = anos.filter((a) => a > anos[0]); // o 1º ano só tem saldos iniciais
+  const terraContabil = partidas.filter((p) => p.categoria === "Ativo Imobilizado" && /terra/i.test(p.conta ?? "")).reduce((s, p) => s + p.valorCentavos, 0);
+  const avisoTerra = (terraContabil: number) => `A compra da terra não está na contabilidade, que começa em 31/12/${anos[0]}: a conta Terra Nua e Benfeitorias tem só R$ ${reaisCurto(terraContabil)}. Se a terra já era dos sócios antes disso, o valor dela naquela época precisa entrar como aporte inicial; sem isso, a valorização e o retorno a mercado ficam superestimados.`;
   const href = (cultivo: string, c: Criterio = criterio) => `/analise-cultivo?cultivo=${cultivo}${c === "receita" ? "" : `&criterio=${c}`}`;
 
   const cabecalho = (
@@ -124,7 +126,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
     const aportadoLiquido = [...completos.slice(1), corrente].reduce((s, a) => s + a.aportes - a.retiradas, 0);
     const tirContabil = tirSocios(completos);
     const aMercado = (a: number) => patrimonioAMercado(patrimonio.get(a) ?? 0, balanco.get(a)?.imobilizado ?? 0, terra?.valorCentavos ?? 0);
-    const tirMercado = terra ? tirSocios(completos.map((a) => ({ ...a, patrimonio: aMercado(a.ano) }))) : null;
+    const tirMercado = terra ? tirSocios(completos.map((a, i) => (i === completos.length - 1 ? { ...a, patrimonio: aMercado(a.ano) } : a))) : null;
     const plHoje = patrimonio.get(anoAtual) ?? 0;
     return (
       <>
@@ -148,7 +150,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             sinal={tirMercado}
             nota={
               terra
-                ? `sítio porteira fechada a R$ ${reaisCurto(terra.valorCentavos)} no início e no fim, no lugar do imobilizado contábil (sem valorização)`
+                ? `começa no que foi aportado e termina com o sítio porteira fechada a R$ ${reaisCurto(terra.valorCentavos)}: inclui a valorização`
                 : "informe o valor de mercado na aba Café"
             }
           />
@@ -159,6 +161,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             A conta Capital Sócio é movimentada como uma conta corrente dos sócios: aportes e retiradas são altos nos dois sentidos todo ano. O que conta é
             o líquido.
           </p>
+          {terra && <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">⚠ {avisoTerra(terraContabil)}</p>}
           <table className="w-full min-w-[32rem] text-sm">
             <thead className="text-xs text-stone-500">
               <tr className="border-b border-stone-200">
@@ -257,7 +260,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               valor={r ? `R$ ${reaisCurto(r.capitalHoje)}` : "—"}
               nota={
                 mercado
-                  ? `sítio porteira fechada (terra, lavouras e máquinas) a mercado · contábil R$ ${reaisCurto(completos.at(-1)?.capital ?? 0)}`
+                  ? `sítio porteira fechada a mercado · contábil R$ ${reaisCurto(completos.at(-1)?.capital ?? 0)}, valorização de R$ ${reaisCurto(mercado - (completos.at(-1)?.capital ?? 0))}`
                   : nome === DESTINO_INVESTIMENTO_GERAL
                     ? "bens pelo valor depreciado — falta o valor de mercado do sítio (abaixo)"
                     : "bens pelo valor depreciado"
@@ -267,13 +270,13 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               rotulo="Retorno sobre o capital"
               valor={taxa(r?.retornoRecente ?? null)}
               sinal={r?.retornoRecente}
-              nota="resultado médio dos últimos 3 anos ÷ capital investido hoje"
+              nota="resultado médio dos últimos 3 anos ÷ capital investido hoje (só a operação, sem valorização)"
             />
             <Numero
               rotulo={`Retorno ao ano (TIR ${periodo})`}
               valor={taxa(r?.tir ?? null)}
               sinal={r?.tir}
-              nota={mercado ? "sítio a mercado no início e no fim pelo mesmo valor; sem valorização" : "sobre o dinheiro investido no período, com o capital que ficou"}
+              nota={mercado ? "do dinheiro investido em cada ano até o sítio a mercado hoje: inclui a valorização" : "sobre o dinheiro investido no período, com o capital que ficou"}
             />
           </div>
 
@@ -329,8 +332,9 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             <Cartao className="mb-6 p-5">
               <h2 className="mb-1 font-semibold text-stone-800">Valor de mercado do sítio</h2>
               <p className="mb-3 text-xs text-stone-500">
-                Porteira fechada (terra, lavouras e máquinas) pelo valor de venda estimado hoje. Substitui o valor contábil desses bens como capital do café
-                (decisões de 23/10/2026), no início e no fim do período, para o retorno ser comparável a deixar o dinheiro aplicado.
+                Porteira fechada (terra, lavouras e máquinas) pelo valor de venda estimado hoje. É o capital do café hoje, no lugar do valor contábil desses bens
+                (decisões de 23/10/2026). Na TIR, o ponto de partida é o que os sócios aportaram e o de chegada é este valor: a valorização do sítio entra no
+                retorno.
                 {terra && ` Último valor: R$ ${reais(terra.valorCentavos)}, estimado em ${dataBr(terra.data)}.`}
               </p>
               <FormValorTerra valor={terra ? reais(terra.valorCentavos) : ""} data={terra?.data ?? ""} hoje={hoje} />
@@ -365,6 +369,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                 </li>
               )}
               {semMovimento.length > 0 && <li>Anos sem nenhum lançamento deste cultivo: {semMovimento.join(", ")}.</li>}
+              {nome === DESTINO_INVESTIMENTO_GERAL && terra && <li className="text-amber-900">{avisoTerra(terraContabil)}</li>}
               {nome === DESTINO_INVESTIMENTO_GERAL && !terra && <li>Sem o valor de mercado do sítio, o capital do café fica só com os bens pelo valor contábil: o capital está subestimado e as taxas de retorno saem distorcidas.</li>}
               {nome !== DESTINO_INVESTIMENTO_GERAL && (
                 <li>Máquinas, prédios e veículos de uso geral estão todos no café (decisão de 23/10/2026); por isso o capital próprio deste cultivo é só o que foi lançado para ele.</li>
