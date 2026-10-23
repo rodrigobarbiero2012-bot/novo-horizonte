@@ -27,6 +27,14 @@ export const CUSTEIO_COMO_INVESTIMENTO: { conta: string; ano: number; cultivo: A
   { conta: "Custeio Geral - Maracujá", ano: 2026, cultivo: "Maracujá" },
 ];
 
+/**
+ * Custeio sem cultivo ("Geral") vai direto para este cultivo, em vez de ser
+ * rateado. Decisão do Rodrigo (23/10/2026): "o café é praticamente o sítio
+ * todo, então o custeio eu vou deixar pro café". Despesas administrativas e
+ * financeiras continuam no rateio.
+ */
+export const DESTINO_CUSTEIO_GERAL: AtividadeRateio = "Café";
+
 /** Cultivo que recebe a partida como investimento, se ela for um custeio reclassificado. */
 export const investimentoEmCusteio = (p: PartidaContabil): AtividadeRateio | null =>
   (p.categoria === "Custeio" && CUSTEIO_COMO_INVESTIMENTO.find((c) => c.conta === p.conta && p.data.startsWith(`${c.ano}-`))?.cultivo) || null;
@@ -66,8 +74,10 @@ export function serieInvestimento(
     camadas.set(p.conta, [...(camadas.get(p.conta) ?? []), { data: p.data, valorCentavos: p.valorCentavos }]);
   }
   const serie = Object.fromEntries(ATIVIDADES_RATEIO.map((a) => [a, [] as AnoCultivo[]])) as Record<AtividadeRateio, AnoCultivo[]>;
-  // O resultado sai sem o custeio reclassificado como investimento.
-  const operacionais = partidas.filter((p) => !investimentoEmCusteio(p));
+  // O resultado sai sem o custeio reclassificado como investimento, e com o custeio geral no cultivo de destino.
+  const operacionais = partidas
+    .filter((p) => !investimentoEmCusteio(p))
+    .map((p) => (p.categoria === "Custeio" && !ehAtividadeRateio(p.atividade) ? { ...p, atividade: DESTINO_CUSTEIO_GERAL as Atividade } : p));
 
   for (const ano of [...anos].sort((x, y) => x - y)) {
     const depreciacao = zeros();

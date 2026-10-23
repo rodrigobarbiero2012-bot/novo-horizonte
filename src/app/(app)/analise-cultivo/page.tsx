@@ -8,7 +8,7 @@ import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
 import { hojeSP } from "@/lib/hoje";
-import { cdiMedioAnual, CUSTEIO_COMO_INVESTIMENTO, DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, valorNoCdi, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
+import { cdiMedioAnual, CUSTEIO_COMO_INVESTIMENTO, DESTINO_CUSTEIO_GERAL, DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, valorNoCdi, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
 import { cdiMensal, rateioManual, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
 import { CRITERIOS, ehCriterio, type AtividadeRateio, type Criterio } from "@/lib/gerencial/rateio";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type SlugProducao } from "@/lib/producao/atividades";
@@ -108,7 +108,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
         />
         {aba !== "socios" && (
           <span className="flex flex-wrap items-center gap-2 text-sm text-stone-600">
-            Custos comuns divididos:
+            Despesas administrativas e financeiras divididas:
             <Abas atual={criterio} opcoes={Object.entries(CRITERIOS).map(([c, r]) => ({ valor: c, rotulo: r.replace("Proporcional ao ", "pelo ").replace("Proporcional à ", "pela "), href: href(aba, c as Criterio) }))} />
           </span>
         )}
@@ -494,10 +494,10 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                   .
                 </li>
               )}
-              {custeioGeralTotal > 0 && (
+              {custeioGeralTotal > 0 && nome === DESTINO_CUSTEIO_GERAL && (
                 <li>
-                  R$ {reaisCurto(custeioGeralTotal)} de custeio desde {completos[0]?.ano ?? anoAtual} está como “Geral”, sem cultivo, e entra aqui pelo critério de
-                  divisão escolhido acima. Quanto mais custeio for lançado direto no cultivo, mais precisa fica a margem.
+                  O custo direto inclui R$ {reaisCurto(custeioGeralTotal)} de custeio lançado como “Geral” desde {completos[0]?.ano ?? anoAtual} (decisão de
+                  23/10/2026: o café é praticamente o sítio todo).
                 </li>
               )}
               {semMovimento.length > 0 && <li>Anos sem nenhum lançamento deste cultivo: {semMovimento.join(", ")}.</li>}

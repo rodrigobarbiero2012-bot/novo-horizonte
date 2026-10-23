@@ -52,6 +52,19 @@ describe("serieInvestimento", () => {
   });
 });
 
+describe("custeio geral", () => {
+  it("vai inteiro para o café, sem rateio", () => {
+    const partidas = [
+      p("2025-02-01", "Custeio", "Geral", 30_000, "Custeio em Geral"),
+      p("2025-05-01", "Receita", "Café", -100_000),
+      p("2025-05-01", "Receita", "Maracujá", -100_000),
+    ];
+    const s = serieInvestimento(partidas, [2025], [], "receita", zero);
+    expect(s.Café[0]).toMatchObject({ custeio: 30_000, resultado: 70_000 });
+    expect(s.Maracujá[0]).toMatchObject({ custeio: 0, resultado: 100_000 });
+  });
+});
+
 describe("custeio reclassificado como investimento", () => {
   it("o Custeio Geral - Maracujá de 2026 sai do resultado e vira capital do maracujá", () => {
     const partidas = [
