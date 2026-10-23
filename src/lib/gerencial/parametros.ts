@@ -45,6 +45,11 @@ export async function valorTerra(): Promise<ValorTerra | null> {
   return v && typeof v.valorCentavos === "number" && v.valorCentavos > 0 && typeof v.data === "string" ? { valorCentavos: v.valorCentavos, data: v.data } : null;
 }
 
+/** CDI mensal gravado pela atualização diária das cotações ("yyyy-mm" → % no mês). */
+export async function cdiMensal(): Promise<Record<string, number>> {
+  return ler<Record<string, number>>("benchmark.cdiMensal", {});
+}
+
 export async function rateioManual(): Promise<Record<AtividadeRateio, number>> {
   const v = await ler<Partial<Record<AtividadeRateio, number>>>(CHAVE_RATEIO, {});
   return Object.fromEntries(ATIVIDADES_RATEIO.map((a) => [a, typeof v[a] === "number" ? v[a] : 0])) as Record<AtividadeRateio, number>;

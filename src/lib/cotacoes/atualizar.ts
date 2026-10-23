@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { buscarCafeArabica, buscarDolarPtax, buscarMaracuja, buscarVacaGorda, type PontoCotacao } from "./fontes";
+import { buscarCafeArabica, buscarCdiMensal, buscarDolarPtax, buscarMaracuja, buscarVacaGorda, type PontoCotacao } from "./fontes";
 import { PRODUTOS, type ChaveProduto } from "./produtos";
 
 const FONTES: Partial<Record<ChaveProduto, () => Promise<PontoCotacao[]>>> = {
@@ -10,6 +10,7 @@ const FONTES: Partial<Record<ChaveProduto, () => Promise<PontoCotacao[]>>> = {
 };
 
 export const CHAVE_ULTIMA_EXECUCAO = "cotacoes.ultimaExecucao"; // { em, resultado }
+export const CHAVE_CDI = "benchmark.cdiMensal"; // { "yyyy-mm": % no mês }
 
 export type ResultadoAtualizacao = Record<string, { gravados: number } | { erro: string }>;
 
@@ -37,6 +38,14 @@ export async function atualizarCotacoes(): Promise<ResultadoAtualizacao> {
       }
     }),
   );
+  // CDI mensal: referência para comparar o retorno do sítio (análise por cultivo).
+  try {
+    const meses = await buscarCdiMensal();
+    await prisma.configuracao.upsert({ where: { chave: CHAVE_CDI }, create: { chave: CHAVE_CDI, valor: meses }, update: { valor: meses } });
+    resultado.CDI = { gravados: Object.keys(meses).length };
+  } catch (e) {
+    resultado.CDI = { erro: e instanceof Error ? e.message : String(e) };
+  }
   // Guarda o resultado da última execução (com o erro de cada fonte) para diagnóstico na tela e no banco.
   await prisma.configuracao.upsert({
     where: { chave: CHAVE_ULTIMA_EXECUCAO },

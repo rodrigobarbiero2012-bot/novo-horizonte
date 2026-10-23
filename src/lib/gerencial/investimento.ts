@@ -224,3 +224,46 @@ export function tirSocios(serie: AnoSocios[]): number | null {
  */
 export const patrimonioAMercado = (patrimonioContabil: number, imobilizadoContabil: number, mercado: number) =>
   patrimonioContabil - imobilizadoContabil + mercado;
+
+// ---------------- Comparação com o CDI ----------------
+
+/** Fator do CDI no ano (produto dos meses); null se faltar algum mês. */
+export function fatorCdiAno(mensal: Record<string, number>, ano: number): number | null {
+  let f = 1;
+  for (let m = 1; m <= 12; m++) {
+    const v = mensal[`${ano}-${String(m).padStart(2, "0")}`];
+    if (v === undefined) return null;
+    f *= 1 + v / 100;
+  }
+  return f;
+}
+
+/** CDI médio ao ano entre `de` e `ate` (anos inteiros); null se faltar dado. */
+export function cdiMedioAnual(mensal: Record<string, number>, de: number, ate: number): number | null {
+  let f = 1;
+  for (let a = de; a <= ate; a++) {
+    const fa = fatorCdiAno(mensal, a);
+    if (fa === null) return null;
+    f *= fa;
+  }
+  return f ** (1 / (ate - de + 1)) - 1;
+}
+
+/**
+ * Quanto valeria em 31/12 de `ate` o dinheiro aplicado no CDI: cada valor
+ * (positivo = aplicado, negativo = resgatado) entra em 31/12 do seu ano, como
+ * na TIR anual. Null se faltar CDI de algum ano.
+ */
+export function valorNoCdi(aplicacoes: { ano: number; valor: number }[], mensal: Record<string, number>, ate: number): number | null {
+  let total = 0;
+  for (const { ano, valor } of aplicacoes) {
+    let f = 1;
+    for (let a = ano + 1; a <= ate; a++) {
+      const fa = fatorCdiAno(mensal, a);
+      if (fa === null) return null;
+      f *= fa;
+    }
+    total += valor * f;
+  }
+  return Math.round(total);
+}

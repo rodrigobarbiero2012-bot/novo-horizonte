@@ -142,6 +142,25 @@ export async function buscarVacaGorda(url: string): Promise<PontoCotacao[]> {
   return lerIndicadorVaca(await resposta.text());
 }
 
+/** CDI acumulado no mês (série SGS 4391 do Banco Central, % a.m.): "yyyy-mm" → % no mês. */
+export function lerCdiMensal(json: { data: string; valor: string }[]): Record<string, number> {
+  const meses: Record<string, number> = {};
+  for (const { data, valor } of json) {
+    const [, m, a] = data.split("/");
+    const v = Number(valor);
+    if (a && m && Number.isFinite(v)) meses[`${a}-${m}`] = v;
+  }
+  if (!Object.keys(meses).length) throw new Error("CDI: resposta vazia");
+  return meses;
+}
+
+export async function buscarCdiMensal(desde = "01/01/2014"): Promise<Record<string, number>> {
+  const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.4391/dados?formato=json&dataInicial=${desde}`;
+  const resposta = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(LIMITE_MS) });
+  if (!resposta.ok) throw new Error(`Banco Central (CDI): HTTP ${resposta.status}`);
+  return lerCdiMensal(await resposta.json());
+}
+
 /** Resposta da API PTAX do Banco Central (CotacaoDolarPeriodo). Último boletim de cada dia. */
 export function lerPtax(json: { value: { cotacaoVenda: number; dataHoraCotacao: string }[] }): PontoCotacao[] {
   const porDia = new Map<string, number>();

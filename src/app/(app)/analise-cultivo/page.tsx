@@ -8,8 +8,8 @@ import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
 import { hojeSP } from "@/lib/hoje";
-import { CUSTEIO_COMO_INVESTIMENTO, DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
-import { rateioManual, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
+import { cdiMedioAnual, CUSTEIO_COMO_INVESTIMENTO, DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, valorNoCdi, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
+import { cdiMensal, rateioManual, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
 import { CRITERIOS, ehCriterio, type AtividadeRateio, type Criterio } from "@/lib/gerencial/rateio";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type SlugProducao } from "@/lib/producao/atividades";
 import { exigirUsuario } from "@/lib/usuario";
@@ -79,7 +79,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   const hoje = hojeSP();
   const anoAtual = Number(hoje.slice(0, 4));
 
-  const [partidas, anos, taxas, manual, terra, talhoes, colheitas] = await Promise.all([
+  const [partidas, anos, taxas, manual, terra, talhoes, colheitas, cdi] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     taxasDepreciacao(),
@@ -87,6 +87,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
     valorTerra(),
     prisma.talhao.groupBy({ by: ["atividade"], where: { ativo: true }, _sum: { areaHa: true } }),
     prisma.movimentoProducao.groupBy({ by: ["atividade"], where: { tipo: { in: ["COLHEITA", "NASCIMENTO"] } }, _count: true }),
+    cdiMensal(),
   ]);
   const anosAnalise = anos.filter((a) => a > anos[0]); // o 1º ano só tem saldos iniciais
   const href = (cultivo: string, c: Criterio = criterio) => `/analise-cultivo?cultivo=${cultivo}${c === "receita" ? "" : `&criterio=${c}`}`;
@@ -126,6 +127,15 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
     const aMercado = (a: number) => patrimonioAMercado(patrimonio.get(a) ?? 0, balanco.get(a)?.imobilizado ?? 0, terra?.valorCentavos ?? 0);
     const tirMercado = terra ? tirSocios(completos.map((a, i) => (i === completos.length - 1 ? { ...a, patrimonio: aMercado(a.ano) } : a))) : null;
     const plHoje = patrimonio.get(anoAtual) ?? 0;
+    // Comparação com o CDI: o mesmo dinheiro (patrimônio inicial + aportes líquidos de cada ano) aplicado no CDI até o fim do último ano fechado.
+    const fim = completos.at(-1)?.ano ?? anoAtual - 1;
+    const noCdi = completos.length
+      ? valorNoCdi([{ ano: completos[0].ano, valor: completos[0].patrimonio }, ...completos.slice(1).map((a) => ({ ano: a.ano, valor: a.aportes - a.retiradas }))], cdi, fim)
+      : null;
+    const cdiPeriodo = completos.length > 1 ? cdiMedioAnual(cdi, completos[1].ano, fim) : null;
+    const semSitio = (patrimonio.get(fim) ?? 0) - (balanco.get(fim)?.imobilizado ?? 0); // patrimônio sem o imobilizado contábil
+    const tirCom = (valorSitio: number) => tirSocios(completos.map((a, i) => (i === completos.length - 1 ? { ...a, patrimonio: semSitio + valorSitio } : a)));
+    const empate = noCdi !== null ? noCdi - semSitio : null; // valor do sítio que empata com o CDI
     return (
       <>
         {cabecalho}
@@ -153,6 +163,66 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             }
           />
         </div>
+        {noCdi !== null && (
+          <Cartao className="mb-6 overflow-x-auto p-5">
+            <h2 className="mb-1 font-semibold text-stone-800">Vale a pena? O sítio comparado ao CDI</h2>
+            <p className="mb-3 text-xs text-stone-500">
+              Mesmo dinheiro, nas mesmas datas: o que entrou e saiu da conta dos sócios em cada ano, aplicado no CDI até 31/12/{fim}. Fonte do CDI: Banco
+              Central (série 4391).
+            </p>
+            <table className="w-full min-w-[32rem] text-sm">
+              <thead className="text-xs text-stone-500">
+                <tr className="border-b border-stone-200">
+                  <th className="py-2 text-left font-medium">Se o dinheiro estivesse…</th>
+                  <th className="py-2 text-right font-medium">Valeria em 31/12/{fim}</th>
+                  <th className="py-2 text-right font-medium">Retorno ao ano</th>
+                </tr>
+              </thead>
+              <tbody>
+                {terra && (
+                  <tr className="border-t border-stone-100 font-medium">
+                    <td className="py-1.5">no sítio, a R$ {reaisCurto(terra.valorCentavos)} porteira fechada</td>
+                    <td className="num py-1.5">{reaisCurto(semSitio + terra.valorCentavos)}</td>
+                    <td className={`num py-1.5 ${(tirMercado ?? 0) < 0 ? "neg" : ""}`}>{taxa(tirMercado)}</td>
+                  </tr>
+                )}
+                <tr className="border-t border-stone-100">
+                  <td className="py-1.5">no CDI</td>
+                  <td className="num py-1.5">{reaisCurto(noCdi)}</td>
+                  <td className="num py-1.5">{taxa(cdiPeriodo)}</td>
+                </tr>
+                <tr className="border-t border-stone-100 text-stone-500">
+                  <td className="py-1.5">no sítio, pelo valor contábil</td>
+                  <td className="num py-1.5">{reaisCurto(patrimonio.get(fim) ?? 0)}</td>
+                  <td className="num py-1.5">{taxa(tirContabil)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="mt-3 space-y-1 text-sm text-stone-700">
+              {terra && (
+                <p>
+                  {semSitio + terra.valorCentavos >= noCdi ? (
+                    <span className="text-folha-700">O sítio vale R$ {reaisCurto(semSitio + terra.valorCentavos - noCdi)} a mais do que o mesmo dinheiro no CDI.</span>
+                  ) : (
+                    <span className="neg">O sítio vale R$ {reaisCurto(noCdi - semSitio - terra.valorCentavos)} a menos do que o mesmo dinheiro no CDI.</span>
+                  )}
+                </p>
+              )}
+              {empate !== null && empate > 0 && <p>Para empatar com o CDI, o sítio porteira fechada precisa valer R$ {reaisCurto(empate)}.</p>}
+              {terra && (
+                <p className="text-xs text-stone-500">
+                  Sensibilidade ao valor do sítio:{" "}
+                  {[-50_000_000, 50_000_000]
+                    .map((d) => terra.valorCentavos + d)
+                    .filter((v) => v > 0)
+                    .map((v) => `a R$ ${reaisCurto(v)}, ${taxa(tirCom(v))} ao ano`)
+                    .join("; ")}
+                  .
+                </p>
+              )}
+            </div>
+          </Cartao>
+        )}
         <Cartao className="overflow-x-auto p-5">
           <h2 className="mb-1 font-semibold text-stone-800">Dinheiro dos sócios por ano</h2>
           <p className="mb-3 text-xs text-stone-500">
@@ -210,6 +280,10 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   const recentes = completos.slice(-3);
   const retornoAgora = capitalAgora > 0 && recentes.length ? recentes.reduce((s, a) => s + a.resultado, 0) / recentes.length / capitalAgora : null;
   const semBaseTir = r !== null && r.tir === null && r.investimentoAcumulado <= 0 && !mercado;
+  // Comparação com o CDI: o dinheiro que o cultivo consumiu (ou devolveu) em cada ano, aplicado no CDI até o fim do último ano fechado.
+  const fimCultivo = completos.at(-1)?.ano ?? anoAtual - 1;
+  const cultivoNoCdi = r?.tir !== null && r ? valorNoCdi(completos.map((a) => ({ ano: a.ano, valor: -a.caixa })), cdi, fimCultivo) : null;
+  const cdiCultivo = completos.length ? cdiMedioAnual(cdi, completos[0].ano, fimCultivo) : null;
 
   // Qualidade dos dados para este cultivo.
   const semMovimento = completos.filter((a) => !a.receita && !a.custeio).map((a) => a.ano);
@@ -299,6 +373,44 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               }
             />
           </div>
+
+          {r && cultivoNoCdi !== null && (
+            <Cartao className="mb-6 p-5 text-sm">
+              <h2 className="mb-1 font-semibold text-stone-800">Vale a pena? {nome} comparado ao CDI</h2>
+              <p className="mb-3 text-xs text-stone-500">
+                O dinheiro que o cultivo consumiu em cada ano (investimentos e prejuízos, menos o que devolveu), aplicado no CDI até 31/12/{fimCultivo}. Fonte
+                do CDI: Banco Central (série 4391).
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-stone-500">{mercado ? "Sítio porteira fechada hoje" : "Capital do cultivo hoje"}</p>
+                  <p className="text-lg font-semibold tabular-nums">R$ {reaisCurto(r.capitalHoje)}</p>
+                  <p className="text-xs text-stone-500">retorno de {taxa(r.tir)} ao ano</p>
+                </div>
+                <div>
+                  <p className="text-xs text-stone-500">O mesmo dinheiro no CDI</p>
+                  <p className="text-lg font-semibold tabular-nums">R$ {reaisCurto(cultivoNoCdi)}</p>
+                  <p className="text-xs text-stone-500">CDI de {taxa(cdiCultivo)} ao ano no período</p>
+                </div>
+                <div>
+                  <p className="text-xs text-stone-500">Diferença</p>
+                  <p className={`text-lg font-semibold tabular-nums ${r.capitalHoje - cultivoNoCdi < 0 ? "neg" : "text-folha-700"}`}>R$ {reaisCurto(r.capitalHoje - cultivoNoCdi)}</p>
+                  <p className="text-xs text-stone-500">{r.capitalHoje >= cultivoNoCdi ? "a favor do cultivo" : "a favor do CDI"}</p>
+                </div>
+              </div>
+              {mercado > 0 && (
+                <p className="mt-3 text-xs text-stone-500">
+                  Para empatar com o CDI, o sítio precisa valer R$ {reaisCurto(cultivoNoCdi)}. Sensibilidade:{" "}
+                  {[-50_000_000, 50_000_000]
+                    .map((d) => mercado + d)
+                    .filter((v) => v > 0)
+                    .map((v) => `a R$ ${reaisCurto(v)}, ${taxa(resumirCultivo(completos, v)?.tir ?? null)} ao ano`)
+                    .join("; ")}
+                  .
+                </p>
+              )}
+            </Cartao>
+          )}
 
           <Cartao className="mb-6 p-5">
             <h2 className="font-semibold text-stone-800">Resultado gerencial por ano — {nome}</h2>

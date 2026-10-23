@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PartidaContabil } from "../contabil/tipos";
-import { resumirCultivo, serieInvestimento, serieSocios, tir, tirSocios, type AnoCultivo } from "./investimento";
+import { cdiMedioAnual, fatorCdiAno, resumirCultivo, serieInvestimento, serieSocios, tir, tirSocios, valorNoCdi, type AnoCultivo } from "./investimento";
 
 const p = (data: string, categoria: PartidaContabil["categoria"], atividade: PartidaContabil["atividade"], valorCentavos: number, conta?: string): PartidaContabil => ({
   data,
@@ -100,5 +100,23 @@ describe("sócios", () => {
     expect(serie[1]).toEqual({ ano: 2025, aportes: 500, retiradas: 100, patrimonio: 1500 });
     // −1000 no início; em 2025: retirou 100, aportou 500, ficou com 1500 → +1100.
     expect(tirSocios(serie)).toBeCloseTo(0.1, 6);
+  });
+});
+
+describe("CDI", () => {
+  // 1% ao mês em 2024 e 2025.
+  const mensal = Object.fromEntries([2024, 2025].flatMap((a) => Array.from({ length: 12 }, (_, i) => [`${a}-${String(i + 1).padStart(2, "0")}`, 1])));
+  const ano = 1.01 ** 12;
+
+  it("compõe os meses do ano e a média do período", () => {
+    expect(fatorCdiAno(mensal, 2024)).toBeCloseTo(ano, 10);
+    expect(fatorCdiAno(mensal, 2023)).toBeNull();
+    expect(cdiMedioAnual(mensal, 2024, 2025)).toBeCloseTo(ano - 1, 10);
+  });
+
+  it("leva cada aplicação de 31/12 do seu ano até o fim", () => {
+    // 1.000 aplicados no fim de 2023 rendem 2024 e 2025; 500 resgatados no fim de 2024 deixam de render 2025.
+    expect(valorNoCdi([{ ano: 2023, valor: 1000 }, { ano: 2024, valor: -500 }], mensal, 2025)).toBe(Math.round(1000 * ano * ano - 500 * ano));
+    expect(valorNoCdi([{ ano: 2022, valor: 1000 }], mensal, 2025)).toBeNull();
   });
 });
