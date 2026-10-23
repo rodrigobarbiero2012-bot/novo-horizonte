@@ -203,6 +203,13 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   const mercado = nome === DESTINO_INVESTIMENTO_GERAL && terra ? terra.valorCentavos : 0;
   const r = resumirCultivo(completos, mercado);
   const periodo = completos.length ? `${completos[0].ano}–${completos.at(-1)!.ano}` : "";
+  // Investimento e capital vão até hoje (incluem o ano em curso); resultado e TIR só com anos fechados.
+  const ateHoje = serie.length ? `${serie[0].ano}–hoje` : "";
+  const investidoAteHoje = (r?.investimentoAcumulado ?? 0) + (corrente?.investimento ?? 0);
+  const capitalAgora = mercado || (corrente ?? completos.at(-1))?.capital || 0;
+  const recentes = completos.slice(-3);
+  const retornoAgora = capitalAgora > 0 && recentes.length ? recentes.reduce((s, a) => s + a.resultado, 0) / recentes.length / capitalAgora : null;
+  const semBaseTir = r !== null && r.tir === null && r.investimentoAcumulado <= 0 && !mercado;
 
   // Qualidade dos dados para este cultivo.
   const semMovimento = completos.filter((a) => !a.receita && !a.custeio).map((a) => a.ano);
@@ -236,8 +243,8 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               }
             />
             <Numero
-              rotulo={`Investido ${periodo}`}
-              valor={r ? `R$ ${reaisCurto(r.investimentoAcumulado)}` : "—"}
+              rotulo={`Investido ${ateHoje}`}
+              valor={`R$ ${reaisCurto(investidoAteHoje)}`}
               nota={
                 nome === DESTINO_INVESTIMENTO_GERAL
                   ? "imobilizado do café + máquinas, prédios, benfeitorias e veículos de uso geral"
@@ -251,33 +258,45 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               }
             />
             <Numero
-              rotulo="Caixa gerado − investido"
+              rotulo={`Caixa gerado − investido ${periodo}`}
               valor={r ? `R$ ${reaisCurto(r.caixaAcumulado)}` : "—"}
               sinal={r?.caixaAcumulado}
               nota="resultado + depreciação − investimentos, somados no período"
             />
             <Numero
               rotulo="Capital investido hoje"
-              valor={r ? `R$ ${reaisCurto(r.capitalHoje)}` : "—"}
+              valor={`R$ ${reaisCurto(capitalAgora)}`}
               nota={
                 mercado
                   ? `sítio porteira fechada a mercado · contábil R$ ${reaisCurto(completos.at(-1)?.capital ?? 0)}, valorização de R$ ${reaisCurto(mercado - (completos.at(-1)?.capital ?? 0))}`
                   : nome === DESTINO_INVESTIMENTO_GERAL
                     ? "bens pelo valor depreciado — falta o valor de mercado do sítio (abaixo)"
-                    : "bens pelo valor depreciado"
+                    : corrente?.investimento
+                      ? `inclui R$ ${reaisCurto(corrente.investimento)} investidos em ${anoAtual}`
+                      : "bens pelo valor depreciado"
               }
             />
             <Numero
               rotulo="Retorno sobre o capital"
-              valor={taxa(r?.retornoRecente ?? null)}
-              sinal={r?.retornoRecente}
-              nota="resultado médio dos últimos 3 anos ÷ capital investido hoje (só a operação, sem valorização)"
+              valor={taxa(retornoAgora)}
+              sinal={retornoAgora}
+              nota={
+                capitalAgora > 0
+                  ? `resultado médio de ${recentes.map((a) => a.ano).join(", ")} ÷ capital investido hoje (só a operação, sem valorização)`
+                  : "sem capital investido lançado: não há base para o retorno"
+              }
             />
             <Numero
               rotulo={`Retorno ao ano (TIR ${periodo})`}
               valor={taxa(r?.tir ?? null)}
               sinal={r?.tir}
-              nota={mercado ? "do dinheiro investido em cada ano até o sítio a mercado hoje: inclui a valorização" : "sobre o dinheiro investido no período, com o capital que ficou"}
+              nota={
+                mercado
+                  ? "do dinheiro investido em cada ano até o sítio a mercado hoje: inclui a valorização"
+                  : semBaseTir
+                    ? `sem investimento lançado até ${completos.at(-1)!.ano}: o cultivo gerou R$ ${reaisCurto(r!.caixaAcumulado)} sem capital próprio, então a taxa não tem base${corrente?.investimento ? `; o investimento de ${anoAtual} entra quando o ano fechar` : ""}`
+                    : "sobre o dinheiro investido no período, com o capital que ficou"
+              }
             />
           </div>
 
