@@ -36,6 +36,15 @@ export async function taxasDepreciacao(): Promise<TaxaConta[]> {
   });
 }
 
+//   "analise.valorTerra" → { valorCentavos, data } — valor de mercado do sítio (terra e benfeitorias) informado pelos sócios
+export const CHAVE_TERRA = "analise.valorTerra";
+export type ValorTerra = { valorCentavos: number; data: string };
+
+export async function valorTerra(): Promise<ValorTerra | null> {
+  const v = await ler<Partial<ValorTerra> | null>(CHAVE_TERRA, null);
+  return v && typeof v.valorCentavos === "number" && v.valorCentavos > 0 && typeof v.data === "string" ? { valorCentavos: v.valorCentavos, data: v.data } : null;
+}
+
 export async function rateioManual(): Promise<Record<AtividadeRateio, number>> {
   const v = await ler<Partial<Record<AtividadeRateio, number>>>(CHAVE_RATEIO, {});
   return Object.fromEntries(ATIVIDADES_RATEIO.map((a) => [a, typeof v[a] === "number" ? v[a] : 0])) as Record<AtividadeRateio, number>;

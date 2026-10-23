@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { CHAVE_RATEIO, CHAVE_TAXAS } from "@/lib/gerencial/parametros";
+import { lerValorBr } from "@/lib/contabil/lancamento";
+import { CHAVE_RATEIO, CHAVE_TAXAS, CHAVE_TERRA } from "@/lib/gerencial/parametros";
 import { ATIVIDADES_RATEIO } from "@/lib/gerencial/rateio";
 import { exigirUsuario } from "@/lib/usuario";
+import { ehDataIso } from "@/lib/validacao";
 
 export type EstadoParametros = { erro?: string; ok?: string } | undefined;
 
@@ -13,17 +15,18 @@ const numero = (v: FormDataEntryValue | null) => {
   return t === "" ? null : Number(t);
 };
 
-async function gravar(usuarioId: string, chave: string, valor: Record<string, number>) {
+async function gravar(usuarioId: string, chave: string, valor: Record<string, number | string>) {
   const antes = await prisma.configuracao.findUnique({ where: { chave } });
   await prisma.configuracao.upsert({ where: { chave }, create: { chave, valor }, update: { valor } });
   await prisma.registroAuditoria.create({
     data: { usuarioId, entidade: "Configuracao", entidadeId: chave, acao: antes ? "ALTERAR" : "CRIAR", antes: antes?.valor ?? undefined, depois: valor },
   });
   revalidatePath("/resultado-atividade");
+  revalidatePath("/analise-cultivo");
   revalidatePath("/");
 }
 
-/** Grava as taxas de depreciação (campos "taxa:<contaId>", em % ao ano). */
+/** Grava as taxas de depreciaÃ§Ã£o (campos "taxa:<contaId>", em % ao ano). */
 export async function salvarTaxas(_: EstadoParametros, form: FormData): Promise<EstadoParametros> {
   const usuario = await exigirUsuario();
   const contas = await prisma.conta.findMany({ where: { categoria: "Ativo Imobilizado" }, select: { id: true } });
@@ -51,4 +54,15 @@ export async function salvarRateio(_: EstadoParametros, form: FormData): Promise
   if (Math.abs(soma - 100) > 0.01) return { erro: `Os percentuais somam ${soma.toLocaleString("pt-BR")}%; precisam somar 100%.` };
   await gravar(usuario.id, CHAVE_RATEIO, pct);
   return { ok: "Percentuais gravados." };
+}
+
+/** Grava o valor de mercado do sítio (terra e benfeitorias), usado como capital na análise por cultivo. */
+export async function salvarValorTerra(_: EstadoParametros, form: FormData): Promise<EstadoParametros> {
+  const usuario = await exigirUsuario();
+  const valor = lerValorBr(String(form.get("valor") ?? ""));
+  const data = String(form.get("data") ?? "");
+  if (valor === null || Number.isNaN(valor) || valor <= 0) return { erro: "Informe o valor de mercado." };
+  if (!ehDataIso(data)) return { erro: "Informe a data da estimativa." };
+  await gravar(usuario.id, CHAVE_TERRA, { valorCentavos: valor, data });
+  return { ok: "Valor gravado." };
 }

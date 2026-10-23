@@ -30,6 +30,7 @@ const ITENS: Item[] = [
   {
     grupo: "Gestão",
     itens: [
+      { href: "/analise-cultivo", rotulo: "Análise por cultivo" },
       { href: "/orcamento", rotulo: "Orçamento × realizado" },
       { href: "/resultado-atividade", rotulo: "Resultado por atividade" },
     ],
