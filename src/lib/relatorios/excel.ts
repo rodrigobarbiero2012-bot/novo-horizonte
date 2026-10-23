@@ -1,5 +1,6 @@
 import "server-only";
 import ExcelJS from "exceljs";
+import { CULTIVOS_LINHA } from "../contabil/lancamento";
 
 // Geração dos arquivos .xlsx. Valores monetários entram como número (em reais,
 // não em centavos) com formato brasileiro, para o Excel somar e filtrar.
@@ -145,7 +146,7 @@ export async function listasParaExcel(listas: Lista[]): Promise<Buffer> {
 export async function modeloImportacao(contas: { nome: string; categoria: string; atividade: string }[]): Promise<Buffer> {
   const wb = novoArquivo();
   const ws = wb.addWorksheet("Lançamentos");
-  const cab = ws.addRow(["Data", "Histórico", "Conta débito", "Conta crédito", "Valor"]);
+  const cab = ws.addRow(["Data", "Histórico", "Conta débito", "Conta crédito", "Valor", "Cultivo"]);
   cab.font = { bold: true, color: { argb: "FFFFFFFF" } };
   cab.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: VERDE } }));
   const exemplo = (data: Date, historico: string, debito: string, credito: string, valor: number) =>
@@ -160,6 +161,9 @@ export async function modeloImportacao(contas: { nome: string; categoria: string
   ws.getColumn(4).width = 34;
   ws.getColumn(5).width = 14;
   ws.getColumn(5).numFmt = "#,##0.00";
+  ws.getColumn(6).width = 14;
+  ws.getCell("G1").value = "Cultivo: opcional. Deixe vazio para usar o da conta; preencha quando o gasto for de outro cultivo.";
+  ws.getCell("G1").font = { italic: true, color: { argb: "FF78716C" } };
   ws.views = [{ state: "frozen", ySplit: 1 }];
   // Lista suspensa com as contas nas colunas de débito e crédito.
   const fim = contas.length + 1;
@@ -174,6 +178,14 @@ export async function modeloImportacao(contas: { nome: string; categoria: string
         error: "Escolha uma conta da aba Contas.",
       };
     }
+    ws.getCell(`F${linha}`).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: [`"${CULTIVOS_LINHA.join(",")}"`],
+      showErrorMessage: true,
+      errorTitle: "Cultivo inexistente",
+      error: `Use ${CULTIVOS_LINHA.join(", ")} ou deixe vazio.`,
+    };
   }
 
   const wc = wb.addWorksheet("Contas");

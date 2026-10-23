@@ -1,10 +1,12 @@
-import { lerValorBr } from "../contabil/lancamento";
+import { CULTIVOS_LINHA, lerValorBr } from "../contabil/lancamento";
 
 // Importação de lançamentos a partir de uma planilha no modelo do sistema:
-// uma linha por lançamento — Data | Histórico | Conta débito | Conta crédito | Valor.
+// uma linha por lançamento — Data | Histórico | Conta débito | Conta crédito | Valor,
+// e a coluna opcional Cultivo (quando o lançamento é de um cultivo diferente do da conta).
 // Aqui ficam as partes puras (leitura e validação); o arquivo é aberto na ação.
 
 export const COLUNAS_MODELO = ["Data", "Histórico", "Conta débito", "Conta crédito", "Valor"] as const;
+export const COLUNA_CULTIVO = "Cultivo"; // opcional
 export const LIMITE_LINHAS = 2000;
 
 export type ContaImportacao = { id: string; nome: string };
@@ -18,6 +20,8 @@ export type LinhaImportada = {
   debitoId: string | null;
   creditoId: string | null;
   valorCentavos: number;
+  /** Cultivo marcado na planilha (Café, Maracujá, Milho, Pecuária); null = o da conta. */
+  cultivo: string | null;
   erros: string[];
 };
 
@@ -87,6 +91,8 @@ export function lerPlanilhaLancamentos(
   const faltando = COLUNAS_MODELO.filter((n) => col[n] < 0);
   if (faltando.length) return { linhas: [], erro: `Faltam as colunas: ${faltando.join(", ")}.` };
 
+  const colCultivo = cab.indexOf(semAcento(COLUNA_CULTIVO));
+  const cultivoPorNome = new Map(CULTIVOS_LINHA.map((c) => [semAcento(c), c]));
   const porNome = new Map(contas.map((c) => [semAcento(c.nome), c.id]));
   const resultado: LinhaImportada[] = [];
   for (let i = indiceCabecalho + 1; i < linhas.length; i++) {
@@ -112,8 +118,11 @@ export function lerPlanilhaLancamentos(
     if (debitoId && debitoId === creditoId) erros.push("débito e crédito na mesma conta");
     const valor = lerValor(cel("Valor"));
     if (valor === null || valor <= 0) erros.push("valor inválido (use número positivo)");
+    const cultivoTexto = colCultivo < 0 ? "" : String(valorCelula(linhas[i]?.[colCultivo]) ?? "").trim();
+    const cultivo = cultivoTexto ? (cultivoPorNome.get(semAcento(cultivoTexto)) ?? null) : null;
+    if (cultivoTexto && !cultivo) erros.push(`cultivo "${cultivoTexto}" não existe (use ${CULTIVOS_LINHA.join(", ")} ou deixe vazio)`);
 
-    resultado.push({ linha: i + 1, data: data ?? "", historico, debito, credito, debitoId, creditoId, valorCentavos: valor ?? 0, erros });
+    resultado.push({ linha: i + 1, data: data ?? "", historico, debito, credito, debitoId, creditoId, valorCentavos: valor ?? 0, cultivo, erros });
   }
   if (!resultado.length) return { linhas: [], erro: "Nenhum lançamento encontrado abaixo dos títulos." };
   return { linhas: resultado };

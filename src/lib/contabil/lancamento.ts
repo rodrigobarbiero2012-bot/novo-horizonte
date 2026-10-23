@@ -10,7 +10,13 @@ export type PartidaDigitada = {
   historico?: string | null;
   fiscal?: boolean | null;
   linhaPlanilha?: number | null;
+  /** Cultivo da linha quando difere do da conta; null = o da conta. */
+  atividade?: string | null;
 };
+
+/** Cultivos que podem ser marcados numa linha do lançamento. */
+export const CULTIVOS_LINHA = ["Café", "Maracujá", "Milho", "Pecuária"] as const;
+export const ehCultivoLinha = (v: unknown): v is (typeof CULTIVOS_LINHA)[number] => (CULTIVOS_LINHA as readonly unknown[]).includes(v);
 export type LancamentoDigitado = { data: string; historico: string; partidas: PartidaDigitada[] };
 
 /** "1.234,56" / "1234.56" / "1234" → centavos; null se vazio; NaN se inválido. */
@@ -38,6 +44,7 @@ export function validarLancamento(l: LancamentoDigitado, contasValidas: Set<stri
   l.partidas.forEach((p, i) => {
     if (!contasValidas.has(p.contaId)) erros.push(`Linha ${i + 1}: escolha uma conta.`);
     if (!Number.isInteger(p.valorCentavos) || p.valorCentavos === 0) erros.push(`Linha ${i + 1}: valor inválido.`);
+    if (p.atividade && !ehCultivoLinha(p.atividade)) erros.push(`Linha ${i + 1}: cultivo inválido.`);
     if (p.data && !ehDataIso(p.data)) {
       erros.push(`Linha ${i + 1}: data inválida.`);
     }

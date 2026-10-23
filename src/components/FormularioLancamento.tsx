@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
-import { lerValorBr } from "@/lib/contabil/lancamento";
+import { CULTIVOS_LINHA, lerValorBr } from "@/lib/contabil/lancamento";
 import { botaoPrimario, botaoSecundario, campo } from "./ui";
 import { cancelarReset } from "./useCampos";
 import type { EstadoFormulario } from "@/app/(app)/lancamentos/acoes";
 
-type Conta = { id: string; nome: string; categoria: string };
+type Conta = { id: string; nome: string; categoria: string; atividade?: string };
 
 export type LinhaForm = {
   contaId: string;
   debito: string;
   credito: string;
+  /** Cultivo da linha quando difere do da conta; "" = o da conta. */
+  atividade?: string;
   data?: string;
   historico?: string;
   fiscal?: "s" | "n" | "";
@@ -43,6 +45,10 @@ const centavos = (t: string) => {
   const v = lerValorBr(t);
   return v === null || Number.isNaN(v) ? 0 : v;
 };
+/** Opção padrão do cultivo: o da conta escolhida ("Geral"/"N/A" vão para o café na análise). */
+const rotuloDaConta = (c: Conta | undefined) =>
+  !c?.atividade ? "Conforme a conta" : c.atividade === "Geral" || c.atividade === "N/A" ? "Conforme a conta (geral)" : `Conforme a conta (${c.atividade})`;
+
 const formatar = (c: number) => (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function FormularioLancamento({
@@ -119,6 +125,7 @@ export function FormularioLancamento({
             <tr>
               {detalharLinhas && <th className="px-2 py-2 text-left font-medium">Data</th>}
               <th className="px-2 py-2 text-left font-medium">Conta</th>
+              <th className="px-2 py-2 text-left font-medium">Cultivo</th>
               {detalharLinhas && <th className="px-2 py-2 text-left font-medium">Histórico da linha</th>}
               <th className="w-36 px-2 py-2 text-right font-medium">Débito</th>
               <th className="w-36 px-2 py-2 text-right font-medium">Crédito</th>
@@ -152,6 +159,22 @@ export function FormularioLancamento({
                           </option>
                         ))}
                       </optgroup>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select
+                    name="cultivoLinha"
+                    value={l.atividade ?? ""}
+                    onChange={(e) => alterar(i, { atividade: e.target.value })}
+                    className={`${campo} min-w-40`}
+                    aria-label={`Cultivo da linha ${i + 1}`}
+                  >
+                    <option value="">{rotuloDaConta(contas.find((c) => c.id === l.contaId))}</option>
+                    {CULTIVOS_LINHA.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
                     ))}
                   </select>
                 </td>
@@ -199,7 +222,7 @@ export function FormularioLancamento({
           </tbody>
           <tfoot className="border-t border-stone-200 bg-stone-50 font-medium">
             <tr>
-              <td className="px-2 py-2" colSpan={detalharLinhas ? 3 : 1}>
+              <td className="px-2 py-2" colSpan={detalharLinhas ? 4 : 2}>
                 <button type="button" onClick={() => setLinhas((ls) => [...ls, linhaVazia()])} className="text-sm text-folha-700 hover:underline">
                   + Adicionar linha
                 </button>

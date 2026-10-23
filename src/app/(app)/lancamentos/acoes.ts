@@ -15,8 +15,8 @@ export type EstadoFormulario = { erros?: string[]; ok?: string } | undefined;
 // arrays de getAll() ficam alinhados por índice.
 function lerFormulario(form: FormData): LancamentoDigitado | string[] {
   const col = (nome: string) => form.getAll(nome).map(String);
-  const [contas, debitos, creditos, datas, historicos, fiscais, linhas] = [
-    col("conta"), col("debito"), col("credito"), col("dataLinha"), col("historicoLinha"), col("fiscalLinha"), col("linhaPlanilha"),
+  const [contas, debitos, creditos, datas, historicos, fiscais, linhas, cultivos] = [
+    col("conta"), col("debito"), col("credito"), col("dataLinha"), col("historicoLinha"), col("fiscalLinha"), col("linhaPlanilha"), col("cultivoLinha"),
   ];
   const erros: string[] = [];
   const partidas: LancamentoDigitado["partidas"] = [];
@@ -39,6 +39,7 @@ function lerFormulario(form: FormData): LancamentoDigitado | string[] {
       historico: historicos[i]?.trim() || null,
       fiscal: fiscais[i] === "s" ? true : fiscais[i] === "n" ? false : null,
       linhaPlanilha: linhas[i] ? Number(linhas[i]) : null,
+      atividade: cultivos[i] || null,
     });
   }
   if (erros.length) return erros;
@@ -61,6 +62,7 @@ function partidasParaGravar(l: LancamentoDigitado): Prisma.PartidaCreateWithoutL
     historico: p.historico,
     fiscal: p.fiscal,
     linhaPlanilha: p.linhaPlanilha,
+    atividade: p.atividade ?? null,
   }));
 }
 
@@ -77,6 +79,7 @@ function fotografia(l: LancamentoComPartidas) {
       valorCentavos: p.valorCentavos,
       data: p.data.toISOString().slice(0, 10),
       historico: p.historico,
+      ...(p.atividade ? { atividade: p.atividade } : {}),
     })),
   };
 }

@@ -108,6 +108,8 @@ model Partida {
   fiscal               Boolean? // coluna "Fiscal S/N" da planilha
   valorNominalCentavos Int?
   linhaPlanilha        Int?
+  /// Cultivo desta linha quando difere do da conta ("Café", "Maracujá", "Milho", "Pecuária"); null = o da conta.
+  atividade            String?
   transacaoBancaria    TransacaoBancaria?
 
   @@index([data])

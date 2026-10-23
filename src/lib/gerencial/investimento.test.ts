@@ -52,6 +52,15 @@ describe("serieInvestimento", () => {
   });
 });
 
+describe("cultivo marcado na linha", () => {
+  it("bem de conta geral marcado como maracujá vira capital e depreciação do maracujá", () => {
+    const partidas = [{ ...p("2024-01-10", "Ativo Imobilizado", "Maracujá", 120_000, "Imobilizado - Máquinas") }];
+    const s = serieInvestimento(partidas, [2024], [{ nome: "Imobilizado - Máquinas", atividade: "N/A", taxa: 10 }], "receita", zero);
+    expect(s.Maracujá[0]).toMatchObject({ investimento: 120_000, depreciacao: 11_000, capital: 109_000 });
+    expect(s.Café[0]).toMatchObject({ investimento: 0, depreciacao: 0, capital: 0 });
+  });
+});
+
 describe("custeio geral", () => {
   it("vai inteiro para o café, sem rateio", () => {
     const partidas = [

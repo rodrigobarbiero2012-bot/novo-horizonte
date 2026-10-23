@@ -68,11 +68,17 @@ export function serieInvestimento(
   criterio: Criterio,
   manual: Por,
 ): Record<AtividadeRateio, AnoCultivo[]> {
-  const camadas = new Map<string, Camada[]>();
+  // Camadas de cada bem por conta e por cultivo dono (a linha pode ter sido marcada com um cultivo diferente do da conta).
+  const camadas = new Map<string, { conta: string; dono: AtividadeRateio; camadas: Camada[] }>();
   for (const p of partidas) {
     if (p.categoria !== "Ativo Imobilizado" || !p.conta) continue;
-    camadas.set(p.conta, [...(camadas.get(p.conta) ?? []), { data: p.data, valorCentavos: p.valorCentavos }]);
+    const dono = donoDoBem(p.atividade);
+    const chave = `${p.conta}|${dono}`;
+    const c = camadas.get(chave) ?? { conta: p.conta, dono, camadas: [] };
+    c.camadas.push({ data: p.data, valorCentavos: p.valorCentavos });
+    camadas.set(chave, c);
   }
+  const taxaDaConta = new Map(taxas.map((t) => [t.nome, t.taxa]));
   const serie = Object.fromEntries(ATIVIDADES_RATEIO.map((a) => [a, [] as AnoCultivo[]])) as Record<AtividadeRateio, AnoCultivo[]>;
   // O resultado sai sem o custeio reclassificado como investimento, e com o custeio geral no cultivo de destino.
   const operacionais = partidas
@@ -82,10 +88,10 @@ export function serieInvestimento(
   for (const ano of [...anos].sort((x, y) => x - y)) {
     const depreciacao = zeros();
     const liquido = zeros();
-    for (const t of taxas) {
-      const d = depreciacaoNoAno(camadas.get(t.nome) ?? [], t.taxa, ano);
-      depreciacao[donoDoBem(t.atividade)] += d.doAno;
-      liquido[donoDoBem(t.atividade)] += d.liquido;
+    for (const c of camadas.values()) {
+      const d = depreciacaoNoAno(c.camadas, taxaDaConta.get(c.conta) ?? 0, ano);
+      depreciacao[c.dono] += d.doAno;
+      liquido[c.dono] += d.liquido;
     }
     // Depreciação já atribuída ao dono do bem: nada de "uso geral" sobra para o rateio.
     const r = resultadoPorAtividade(

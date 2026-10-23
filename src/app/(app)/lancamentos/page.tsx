@@ -4,6 +4,7 @@ import { BotaoExportar, Cabecalho, Cartao, Valor, botaoPrimario, botaoSecundario
 import { prisma } from "@/lib/db";
 import { contasAtivas } from "@/lib/consultas";
 import { filtroLancamentos, ORDENS, type Ordem } from "@/lib/lancamentos/filtro";
+import { CULTIVOS_LINHA } from "@/lib/contabil/lancamento";
 import { dataBr, reais } from "@/lib/formato";
 import { exigirUsuario } from "@/lib/usuario";
 import { Pagina } from "@/components/Pagina";
@@ -18,7 +19,7 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
   await exigirUsuario();
   const sp = await searchParams;
 
-  const { conta, categoria, contaId, busca, de, ate, tipo, minTxt, maxTxt, ordem, dir, filtro, orderBy, temFiltro } = filtroLancamentos(sp);
+  const { conta, categoria, contaId, busca, de, ate, tipo, minTxt, maxTxt, cultivo, ordem, dir, filtro, orderBy, temFiltro } = filtroLancamentos(sp);
   const pagina = Math.max(1, Number(sp.pagina) || 1);
   const pular = (pagina - 1) * POR_PAGINA;
 
@@ -34,7 +35,7 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
       orderBy,
       skip: pular,
       take: POR_PAGINA,
-      include: { conta: { select: { nome: true } }, lancamento: { select: { id: true, historico: true, _count: { select: { anexos: true } } } } },
+      include: { conta: { select: { nome: true, atividade: true } }, lancamento: { select: { id: true, historico: true, _count: { select: { anexos: true } } } } },
     }),
     comSaldo
       ? prisma.partida.aggregate({ where: { contaId, ...(ate && { data: { lte: new Date(ate) } }) }, _sum: { valorCentavos: true } })
@@ -53,7 +54,7 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
 
   // Links preservando filtros e ordem atuais.
   const atuais: Record<string, string> = Object.fromEntries(
-    Object.entries({ conta, busca, de, ate, tipo, min: minTxt, max: maxTxt, ordem: ordem === "data" ? "" : ordem, dir: dir === ORDENS[ordem] ? "" : dir }).filter(
+    Object.entries({ conta, busca, de, ate, tipo, cultivo, min: minTxt, max: maxTxt, ordem: ordem === "data" ? "" : ordem, dir: dir === ORDENS[ordem] ? "" : dir }).filter(
       ([, v]) => v,
     ),
   );
@@ -120,7 +121,7 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
             Filtrar
           </button>
           {temFiltro && (
-            <Link href={url({ conta: "", busca: "", de: "", ate: "", tipo: "", min: "", max: "", pagina: "" })} className={`${botaoSecundario} py-1.5`}>
+            <Link href={url({ conta: "", busca: "", de: "", ate: "", tipo: "", cultivo: "", min: "", max: "", pagina: "" })} className={`${botaoSecundario} py-1.5`}>
               Limpar filtros
             </Link>
           )}
@@ -133,6 +134,7 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
             <tr>
               <th className={`${th} pl-4 text-left`}>{tituloOrdenavel("data", "Data", "left")}</th>
               <th className={`${th} text-left`}>{tituloOrdenavel("conta", "Conta", "left")}</th>
+              <th className={`${th} text-left`}>Cultivo</th>
               <th className={`${th} text-left`}>{tituloOrdenavel("historico", "Histórico", "left")}</th>
               <th className={`${th} text-right`}>{tituloOrdenavel("debito", "Débito", "right")}</th>
               <th className={`${th} text-right`}>{tituloOrdenavel("credito", "Crédito", "right")}</th>
@@ -157,6 +159,16 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
                         </option>
                       ))}
                     </optgroup>
+                  ))}
+                </select>
+              </th>
+              <th className="px-3 pb-2.5">
+                <select form="filtros" name="cultivo" defaultValue={cultivo} className={`${campoFiltro} min-w-28`} aria-label="Filtrar cultivo">
+                  <option value="">Todos</option>
+                  {CULTIVOS_LINHA.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
                 </select>
               </th>
@@ -188,6 +200,9 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
                   </Link>
                 </td>
                 <td className="px-3 py-1.5 text-stone-700">{p.conta.nome}</td>
+                <td className={`whitespace-nowrap px-3 py-1.5 ${p.atividade ? "font-medium text-folha-700" : "text-stone-500"}`} title={p.atividade ? "Marcado no lançamento" : "Conforme a conta"}>
+                  {p.atividade ?? (p.conta.atividade === "Geral" || p.conta.atividade === "N/A" ? "" : p.conta.atividade)}
+                </td>
                 <td className="max-w-md truncate px-3 py-1.5 text-stone-600" title={p.historico ?? p.lancamento.historico ?? ""}>
                   {p.lancamento._count.anexos > 0 && (
                     <span className="mr-1" title="Tem documento anexado">
@@ -207,7 +222,7 @@ async function Conteudo({ searchParams }: PageProps<"/lancamentos">) {
             ))}
             {linhas.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-stone-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-stone-500">
                   Nenhuma linha encontrada com esses filtros.
                 </td>
               </tr>

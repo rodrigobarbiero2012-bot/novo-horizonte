@@ -21,9 +21,23 @@ describe("lerPlanilhaLancamentos", () => {
     );
     expect(r.erro).toBeUndefined();
     expect(r.linhas).toEqual([
-      { linha: 4, data: "2026-10-02", historico: "Adubo NPK", debito: "custeio adubos", credito: "CC ACM (Capital Sócio)", debitoId: "adubo", creditoId: "acm", valorCentavos: 123450, erros: [] },
-      { linha: 5, data: "2026-10-05", historico: "Adubo foliar", debito: "Custeio Adubos", credito: "CC ACM (Capital Socio)", debitoId: "adubo", creditoId: "acm", valorCentavos: 123456, erros: [] },
+      { linha: 4, data: "2026-10-02", historico: "Adubo NPK", debito: "custeio adubos", credito: "CC ACM (Capital Sócio)", debitoId: "adubo", creditoId: "acm", valorCentavos: 123450, cultivo: null, erros: [] },
+      { linha: 5, data: "2026-10-05", historico: "Adubo foliar", debito: "Custeio Adubos", credito: "CC ACM (Capital Socio)", debitoId: "adubo", creditoId: "acm", valorCentavos: 123456, cultivo: null, erros: [] },
     ]);
+  });
+
+  it("lê a coluna opcional Cultivo (sem acento e em qualquer caixa) e recusa cultivo desconhecido", () => {
+    const r = lerPlanilhaLancamentos(
+      [
+        ["Data", "Histórico", "Conta débito", "Conta crédito", "Valor", "Cultivo"],
+        ["01/03/2026", "diárias colheita maracujá", "Custeio Adubos", "CC ACM (Capital Sócio)", 10, "maracuja"],
+        ["01/03/2026", "adubo", "Custeio Adubos", "CC ACM (Capital Sócio)", 10, ""],
+        ["01/03/2026", "x", "Custeio Adubos", "CC ACM (Capital Sócio)", 10, "Soja"],
+      ],
+      contas,
+    );
+    expect(r.linhas.map((l) => l.cultivo)).toEqual(["Maracujá", null, null]);
+    expect(r.linhas[2].erros).toEqual(['cultivo "Soja" não existe (use Café, Maracujá, Milho, Pecuária ou deixe vazio)']);
   });
 
   it("aponta os erros de cada linha", () => {

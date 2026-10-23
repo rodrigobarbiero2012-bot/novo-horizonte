@@ -20,6 +20,15 @@ describe("validarLancamento", () => {
   const contas = new Set(["banco", "adubo"]);
   const base = { data: "2026-10-16", historico: "NF 123 adubo" };
 
+  it("aceita cultivo da linha válido e recusa o desconhecido", () => {
+    const partidas = (atividade: string) => [
+      { contaId: "adubo", valorCentavos: 50000, atividade },
+      { contaId: "banco", valorCentavos: -50000 },
+    ];
+    expect(validarLancamento({ ...base, partidas: partidas("Maracujá") }, contas)).toEqual([]);
+    expect(validarLancamento({ ...base, partidas: partidas("Soja") }, contas)).toEqual(["Linha 1: cultivo inválido."]);
+  });
+
   it("aceita débito e crédito iguais", () => {
     const partidas = [
       { contaId: "adubo", valorCentavos: 50000 },

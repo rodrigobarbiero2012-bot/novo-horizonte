@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { lerValorBr } from "../contabil/lancamento";
+import { ehCultivoLinha, lerValorBr } from "../contabil/lancamento";
 import { ehCategoria } from "../contabil/tipos";
 
 // Filtros e ordenação da lista de lançamentos, lidos da URL. Usados pela tela
@@ -49,6 +49,7 @@ export function filtroLancamentos(sp: Parametros) {
   const tipo = sp.tipo === "D" || sp.tipo === "C" ? sp.tipo : "";
   const minTxt = texto(sp.min);
   const maxTxt = texto(sp.max);
+  const cultivo = ehCultivoLinha(sp.cultivo) ? sp.cultivo : ""; // cultivo da linha (marcado nela ou o da conta)
   const min = lerValorBr(minTxt);
   const max = lerValorBr(maxTxt);
   const valorMin = min !== null && !Number.isNaN(min) ? Math.abs(min) : undefined;
@@ -79,9 +80,10 @@ export function filtroLancamentos(sp: Parametros) {
           }
         : {},
       filtroValor,
+      cultivo ? { OR: [{ atividade: cultivo }, { atividade: null, conta: { atividade: cultivo } }] } : {},
     ],
   };
   const orderBy = ordenacao(ordem, dir);
-  const temFiltro = Boolean(conta || busca || de || ate || tipo || minTxt || maxTxt);
-  return { conta, categoria, contaId, busca, de, ate, tipo, minTxt, maxTxt, ordem, dir, filtro, orderBy, temFiltro };
+  const temFiltro = Boolean(conta || busca || de || ate || tipo || minTxt || maxTxt || cultivo);
+  return { conta, categoria, contaId, busca, de, ate, tipo, minTxt, maxTxt, cultivo, ordem, dir, filtro, orderBy, temFiltro };
 }

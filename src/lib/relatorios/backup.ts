@@ -31,6 +31,7 @@ export async function montarBackup(): Promise<Lista[]> {
             historico: true,
             fiscal: true,
             linhaPlanilha: true,
+            atividade: true,
             conta: { select: { nome: true } },
           },
         },
@@ -71,6 +72,7 @@ export async function montarBackup(): Promise<Lista[]> {
         { titulo: "Criado em", tipo: "data", largura: 12 },
         { titulo: "Id da linha", tipo: "texto", largura: 28 },
         { titulo: "Valor nominal (planilha)", tipo: "moeda" },
+        { titulo: "Cultivo marcado na linha", tipo: "texto", largura: 12 },
       ],
       linhas: lancamentos.flatMap((l) =>
         l.partidas.map((p) => [
@@ -88,6 +90,7 @@ export async function montarBackup(): Promise<Lista[]> {
           iso(l.criadoEm),
           p.id,
           p.valorNominalCentavos,
+          p.atividade,
         ]),
       ),
     },

@@ -63,6 +63,7 @@ async function Conteudo({ params }: PageProps<"/lancamentos/[id]">) {
     historico: p.historico ?? "",
     fiscal: p.fiscal === true ? "s" : p.fiscal === false ? "n" : "",
     linhaPlanilha: p.linhaPlanilha,
+    atividade: p.atividade ?? "",
   }));
 
   const origem =

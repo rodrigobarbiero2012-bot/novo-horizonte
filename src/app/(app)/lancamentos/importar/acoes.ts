@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
 import { revalidatePath } from "next/cache";
+import { ehCultivoLinha } from "@/lib/contabil/lancamento";
 import { prisma } from "@/lib/db";
 import { chaveDuplicata, lerPlanilhaLancamentos, LIMITE_LINHAS, type LinhaImportada } from "@/lib/importacao/lancamentosExcel";
 import { exigirUsuario } from "@/lib/usuario";
@@ -92,7 +93,8 @@ export async function importarLancamentos(arquivo: string, linhas: LinhaImportad
       ativas.has(l.debitoId) &&
       ativas.has(l.creditoId) &&
       Number.isSafeInteger(l.valorCentavos) &&
-      l.valorCentavos > 0,
+      l.valorCentavos > 0 &&
+      (l.cultivo === null || l.cultivo === undefined || ehCultivoLinha(l.cultivo)),
   );
   if (validas.length !== linhas.length) return { ok: false, erro: "Há linhas inválidas na seleção. Analise a planilha de novo." };
 
@@ -118,8 +120,8 @@ export async function importarLancamentos(arquivo: string, linhas: LinhaImportad
     }),
     prisma.partida.createMany({
       data: lancamentos.flatMap((l) => [
-        { lancamentoId: l.id, contaId: l.debitoId!, valorCentavos: l.valorCentavos, data: l.quando },
-        { lancamentoId: l.id, contaId: l.creditoId!, valorCentavos: -l.valorCentavos, data: l.quando },
+        { lancamentoId: l.id, contaId: l.debitoId!, valorCentavos: l.valorCentavos, data: l.quando, atividade: l.cultivo ?? null },
+        { lancamentoId: l.id, contaId: l.creditoId!, valorCentavos: -l.valorCentavos, data: l.quando, atividade: l.cultivo ?? null },
       ]),
     }),
   ]);
