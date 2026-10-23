@@ -137,13 +137,13 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             nota={terra ? `com o sítio porteira fechada a R$ ${reaisCurto(terra.valorCentavos)}, menos as dívidas · contábil R$ ${reaisCurto(plHoje)}` : "ativos − dívidas, pelo balanço"}
           />
           <Numero
-            rotulo={`Retorno dos sócios ao ano (${anos[0]}–${anoAtual - 1})`}
+            rotulo={`Retorno ao ano pelo balanço (TIR ${anos[0]}–${anoAtual - 1})`}
             valor={taxa(tirContabil)}
             sinal={tirContabil}
             nota="TIR pelo balanço: aportes e retiradas de cada ano contra o patrimônio contábil no fim"
           />
           <Numero
-            rotulo="Retorno com o sítio a mercado"
+            rotulo={`Retorno ao ano com o sítio a mercado (TIR ${anos[0]}–${anoAtual - 1})`}
             valor={taxa(tirMercado)}
             sinal={tirMercado}
             nota={
