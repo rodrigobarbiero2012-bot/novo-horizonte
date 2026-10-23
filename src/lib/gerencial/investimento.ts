@@ -17,6 +17,20 @@ import { ATIVIDADES_RATEIO, ehAtividadeRateio, resultadoPorAtividade, type Ativi
 
 export const DESTINO_INVESTIMENTO_GERAL: AtividadeRateio = "Café";
 
+/**
+ * Gastos lançados como custeio que, na análise, são investimento (formação de
+ * lavoura): saem do custeio e entram como capital do cultivo no ano do gasto,
+ * sem depreciação. Decisão do Rodrigo (23/10/2026): só o "Custeio Geral -
+ * Maracujá" de 2026, que inclui o material da nova área.
+ */
+export const CUSTEIO_COMO_INVESTIMENTO: { conta: string; ano: number; cultivo: AtividadeRateio }[] = [
+  { conta: "Custeio Geral - Maracujá", ano: 2026, cultivo: "Maracujá" },
+];
+
+/** Cultivo que recebe a partida como investimento, se ela for um custeio reclassificado. */
+export const investimentoEmCusteio = (p: PartidaContabil): AtividadeRateio | null =>
+  (p.categoria === "Custeio" && CUSTEIO_COMO_INVESTIMENTO.find((c) => c.conta === p.conta && p.data.startsWith(`${c.ano}-`))?.cultivo) || null;
+
 type Por = Record<AtividadeRateio, number>;
 const zeros = (): Por => ({ Café: 0, Maracujá: 0, Milho: 0, Pecuária: 0 });
 
@@ -27,8 +41,8 @@ export type AnoCultivo = {
   margemDireta: number; // receita − custeio − depreciação dos bens do cultivo
   resultado: number; // margem direta − custos comuns rateados
   depreciacao: number;
-  investimento: number; // imobilizado comprado (e, no gado, animais) no ano
-  capital: number; // imobilizado líquido de depreciação (+ rebanho) em 31/12
+  investimento: number; // imobilizado comprado (no gado, animais; custeio reclassificado como formação) no ano
+  capital: number; // imobilizado líquido de depreciação (+ rebanho e formação de lavoura) em 31/12
   /** Caixa da operação no ano: resultado + depreciação − investimento. */
   caixa: number;
 };
@@ -52,6 +66,8 @@ export function serieInvestimento(
     camadas.set(p.conta, [...(camadas.get(p.conta) ?? []), { data: p.data, valorCentavos: p.valorCentavos }]);
   }
   const serie = Object.fromEntries(ATIVIDADES_RATEIO.map((a) => [a, [] as AnoCultivo[]])) as Record<AtividadeRateio, AnoCultivo[]>;
+  // O resultado sai sem o custeio reclassificado como investimento.
+  const operacionais = partidas.filter((p) => !investimentoEmCusteio(p));
 
   for (const ano of [...anos].sort((x, y) => x - y)) {
     const depreciacao = zeros();
@@ -63,21 +79,22 @@ export function serieInvestimento(
     }
     // Depreciação já atribuída ao dono do bem: nada de "uso geral" sobra para o rateio.
     const r = resultadoPorAtividade(
-      partidas,
+      operacionais,
       ano,
       criterio,
       manual,
       ATIVIDADES_RATEIO.map((a) => ({ atividade: a as Atividade, valor: depreciacao[a] })),
     );
     const investimento = zeros();
-    const rebanho = zeros();
+    const semDepreciacao = zeros(); // rebanho e formação de lavoura vinda do custeio
     for (const p of partidas) {
       const a = Number(p.data.slice(0, 4));
       if (a > ano) continue;
       if (p.categoria === "Ativo Imobilizado" && a === ano) investimento[donoDoBem(p.atividade)] += p.valorCentavos;
-      if (ehEstoqueAnimais(p)) {
-        rebanho.Pecuária += p.valorCentavos;
-        if (a === ano) investimento.Pecuária += p.valorCentavos;
+      const cultivo = ehEstoqueAnimais(p) ? "Pecuária" : investimentoEmCusteio(p);
+      if (cultivo) {
+        semDepreciacao[cultivo] += p.valorCentavos;
+        if (a === ano) investimento[cultivo] += p.valorCentavos;
       }
     }
     for (const a of ATIVIDADES_RATEIO) {
@@ -89,7 +106,7 @@ export function serieInvestimento(
         resultado: r.resultado[a],
         depreciacao: depreciacao[a],
         investimento: investimento[a],
-        capital: liquido[a] + rebanho[a],
+        capital: liquido[a] + semDepreciacao[a],
         caixa: r.resultado[a] + depreciacao[a] - investimento[a],
       });
     }

@@ -8,7 +8,7 @@ import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
 import { hojeSP } from "@/lib/hoje";
-import { DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
+import { CUSTEIO_COMO_INVESTIMENTO, DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
 import { rateioManual, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
 import { CRITERIOS, ehCriterio, type AtividadeRateio, type Criterio } from "@/lib/gerencial/rateio";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type SlugProducao } from "@/lib/producao/atividades";
@@ -89,8 +89,6 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
     prisma.movimentoProducao.groupBy({ by: ["atividade"], where: { tipo: { in: ["COLHEITA", "NASCIMENTO"] } }, _count: true }),
   ]);
   const anosAnalise = anos.filter((a) => a > anos[0]); // o 1º ano só tem saldos iniciais
-  const terraContabil = partidas.filter((p) => p.categoria === "Ativo Imobilizado" && /terra/i.test(p.conta ?? "")).reduce((s, p) => s + p.valorCentavos, 0);
-  const avisoTerra = (terraContabil: number) => `A compra da terra não está na contabilidade, que começa em 31/12/${anos[0]}: a conta Terra Nua e Benfeitorias tem só R$ ${reaisCurto(terraContabil)}. Se a terra já era dos sócios antes disso, o valor dela naquela época precisa entrar como aporte inicial; sem isso, a valorização e o retorno a mercado ficam superestimados.`;
   const href = (cultivo: string, c: Criterio = criterio) => `/analise-cultivo?cultivo=${cultivo}${c === "receita" ? "" : `&criterio=${c}`}`;
 
   const cabecalho = (
@@ -161,7 +159,6 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             A conta Capital Sócio é movimentada como uma conta corrente dos sócios: aportes e retiradas são altos nos dois sentidos todo ano. O que conta é
             o líquido.
           </p>
-          {terra && <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">⚠ {avisoTerra(terraContabil)}</p>}
           <table className="w-full min-w-[32rem] text-sm">
             <thead className="text-xs text-stone-500">
               <tr className="border-b border-stone-200">
@@ -246,7 +243,11 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                   ? "imobilizado do café + máquinas, prédios, benfeitorias e veículos de uso geral"
                   : nome === "Pecuária"
                     ? "compra de animais (estoque) e bens da pecuária"
-                    : "bens lançados para este cultivo"
+                    : CUSTEIO_COMO_INVESTIMENTO.some((c) => c.cultivo === nome)
+                      ? `bens do cultivo + formação de lavoura lançada como custeio (${CUSTEIO_COMO_INVESTIMENTO.filter((c) => c.cultivo === nome)
+                          .map((c) => `${c.conta.replace(/^Custeio /, "")} ${c.ano}`)
+                          .join(", ")})`
+                      : "bens lançados para este cultivo"
               }
             />
             <Numero
@@ -369,7 +370,6 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                 </li>
               )}
               {semMovimento.length > 0 && <li>Anos sem nenhum lançamento deste cultivo: {semMovimento.join(", ")}.</li>}
-              {nome === DESTINO_INVESTIMENTO_GERAL && terra && <li className="text-amber-900">{avisoTerra(terraContabil)}</li>}
               {nome === DESTINO_INVESTIMENTO_GERAL && !terra && <li>Sem o valor de mercado do sítio, o capital do café fica só com os bens pelo valor contábil: o capital está subestimado e as taxas de retorno saem distorcidas.</li>}
               {nome !== DESTINO_INVESTIMENTO_GERAL && (
                 <li>Máquinas, prédios e veículos de uso geral estão todos no café (decisão de 23/10/2026); por isso o capital próprio deste cultivo é só o que foi lançado para ele.</li>

@@ -52,6 +52,19 @@ describe("serieInvestimento", () => {
   });
 });
 
+describe("custeio reclassificado como investimento", () => {
+  it("o Custeio Geral - Maracujá de 2026 sai do resultado e vira capital do maracujá", () => {
+    const partidas = [
+      p("2026-03-17", "Custeio", "Maracujá", 27_000, "Custeio Geral - Maracujá"),
+      p("2025-03-17", "Custeio", "Maracujá", 1_000, "Custeio Geral - Maracujá"),
+      p("2026-05-01", "Receita", "Maracujá", -50_000, "Receita Venda Maracujá"),
+    ];
+    const s = serieInvestimento(partidas, [2025, 2026], [], "receita", zero).Maracujá;
+    expect(s[0]).toMatchObject({ ano: 2025, custeio: 1_000, investimento: 0, capital: 0 }); // 2025 continua custeio
+    expect(s[1]).toMatchObject({ ano: 2026, custeio: 0, resultado: 50_000, investimento: 27_000, capital: 27_000, caixa: 23_000 });
+  });
+});
+
 describe("resumirCultivo", () => {
   const ano = (a: number, resultado: number, investimento: number, capital: number): AnoCultivo => ({
     ano: a,
