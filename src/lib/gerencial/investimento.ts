@@ -9,10 +9,10 @@ import { ATIVIDADES_RATEIO, ehAtividadeRateio, resultadoPorAtividade, type Ativi
 // Decisões do Rodrigo (23/10/2026):
 //  - Investimento de uso geral (máquinas, prédios, terra, veículos) é 100% do
 //    café — e, por coerência, a depreciação desses bens também.
-//  - A terra entra pelo valor de mercado informado por ele. Como ela não está
-//    na contabilidade, entra como capital no início e no fim do período pelo
-//    mesmo valor: o retorno é o da operação sobre o patrimônio de hoje, sem
-//    contar valorização da terra.
+//  - O capital do café é o valor de mercado do sítio "porteira fechada" (terra,
+//    lavouras e máquinas) informado por ele, no lugar do valor contábil desses
+//    bens. Entra no início e no fim do período pelo mesmo valor: o retorno é o
+//    da operação sobre o patrimônio de hoje, sem contar valorização.
 
 export const DESTINO_INVESTIMENTO_GERAL: AtividadeRateio = "Café";
 
@@ -128,28 +128,29 @@ export type ResumoCultivo = {
   investimentoAcumulado: number;
   caixaAcumulado: number; // resultado + depreciação − investimento, somados
   margemMedia: number | null; // resultado acumulado ÷ receita acumulada
-  capitalHoje: number; // capital contábil no fim do último ano + terra
+  capitalHoje: number; // valor de mercado informado ou, sem ele, o capital contábil do fim do último ano
   /** Resultado médio dos últimos 3 anos ÷ capital de hoje. */
   retornoRecente: number | null;
-  /** TIR do período: capital inicial (terra) → caixa de cada ano → capital final. */
+  /** TIR do período: capital inicial (mercado) → caixa de cada ano → capital final. */
   tir: number | null;
 };
 
 /**
- * Resumo do período (só anos completos). `terra` = valor de mercado (centavos)
- * que entra como capital no início e no fim; 0 quando não informado.
+ * Resumo do período (só anos completos). `mercado` = valor de mercado dos bens
+ * do cultivo (centavos), que substitui o capital contábil e entra no início e
+ * no fim pelo mesmo valor; 0 quando não informado.
  */
-export function resumirCultivo(serie: AnoCultivo[], terra = 0): ResumoCultivo | null {
+export function resumirCultivo(serie: AnoCultivo[], mercado = 0): ResumoCultivo | null {
   if (!serie.length) return null;
   const soma = (f: (a: AnoCultivo) => number) => serie.reduce((s, a) => s + f(a), 0);
   const ultimo = serie.at(-1)!;
   const receitaAcumulada = soma((a) => a.receita);
   const resultadoAcumulado = soma((a) => a.resultado);
-  const capitalHoje = ultimo.capital + terra;
+  const capitalHoje = mercado > 0 ? mercado : ultimo.capital;
   const recentes = serie.slice(-3);
   const mediaRecente = recentes.reduce((s, a) => s + a.resultado, 0) / recentes.length;
-  // Instante zero = início do 1º ano (terra); cada ano, o caixa; no último, mais o capital que ficou.
-  const fluxos = [-terra, ...serie.map((a, i) => a.caixa + (i === serie.length - 1 ? capitalHoje : 0))];
+  // Instante zero = início do 1º ano (valor de mercado); cada ano, o caixa; no último, mais o capital que ficou.
+  const fluxos = [-mercado, ...serie.map((a, i) => a.caixa + (i === serie.length - 1 ? capitalHoje : 0))];
   const investimentoAcumulado = soma((a) => a.investimento);
   return {
     anos: serie.length,
@@ -161,8 +162,8 @@ export function resumirCultivo(serie: AnoCultivo[], terra = 0): ResumoCultivo | 
     margemMedia: receitaAcumulada > 0 ? resultadoAcumulado / receitaAcumulada : null,
     capitalHoje,
     retornoRecente: capitalHoje > 0 ? mediaRecente / capitalHoje : null,
-    // Sem capital próprio (nada investido nem terra), "retorno sobre o investimento" não tem base.
-    tir: investimentoAcumulado > 0 || terra > 0 ? tir(fluxos) : null,
+    // Sem capital próprio (nada investido nem valor de mercado), "retorno sobre o investimento" não tem base.
+    tir: investimentoAcumulado > 0 || mercado > 0 ? tir(fluxos) : null,
   };
 }
 
@@ -188,15 +189,20 @@ export function serieSocios(partidas: PartidaContabil[], anos: number[], patrimo
 }
 
 /**
- * TIR do dinheiro dos sócios: começa com o patrimônio do fim do 1º ano (e a
- * terra), depois aportes (saída) e retiradas (entrada) de cada ano, e termina
- * com o patrimônio do último ano (e a terra).
+ * TIR do dinheiro dos sócios: começa com o patrimônio do fim do 1º ano, depois
+ * aportes (saída) e retiradas (entrada) de cada ano, e termina com o patrimônio
+ * do último ano. Para a versão a mercado, a série já vem com o patrimônio a
+ * mercado (ver `patrimonioAMercado`).
  */
-export function tirSocios(serie: AnoSocios[], terra = 0): number | null {
+export function tirSocios(serie: AnoSocios[]): number | null {
   if (serie.length < 2) return null;
   const [inicio, ...resto] = serie;
-  return tir([
-    -(inicio.patrimonio + terra),
-    ...resto.map((a, i) => a.retiradas - a.aportes + (i === resto.length - 1 ? a.patrimonio + terra : 0)),
-  ]);
+  return tir([-inicio.patrimonio, ...resto.map((a, i) => a.retiradas - a.aportes + (i === resto.length - 1 ? a.patrimonio : 0))]);
 }
+
+/**
+ * Patrimônio com o sítio porteira fechada a mercado: tira o imobilizado
+ * contábil (terra, lavouras, máquinas pelo custo) e põe o valor de mercado.
+ */
+export const patrimonioAMercado = (patrimonioContabil: number, imobilizadoContabil: number, mercado: number) =>
+  patrimonioContabil - imobilizadoContabil + mercado;

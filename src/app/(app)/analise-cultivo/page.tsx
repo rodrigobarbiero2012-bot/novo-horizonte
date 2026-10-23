@@ -8,7 +8,7 @@ import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
 import { hojeSP } from "@/lib/hoje";
-import { DESTINO_INVESTIMENTO_GERAL, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
+import { DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
 import { rateioManual, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
 import { CRITERIOS, ehCriterio, type AtividadeRateio, type Criterio } from "@/lib/gerencial/rateio";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type SlugProducao } from "@/lib/producao/atividades";
@@ -123,25 +123,34 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
     const corrente = serieSocios(partidas, [anoAtual], patrimonio)[0];
     const aportadoLiquido = [...completos.slice(1), corrente].reduce((s, a) => s + a.aportes - a.retiradas, 0);
     const tirContabil = tirSocios(completos);
-    const tirComTerra = terra ? tirSocios(completos, terra.valorCentavos) : null;
+    const aMercado = (a: number) => patrimonioAMercado(patrimonio.get(a) ?? 0, balanco.get(a)?.imobilizado ?? 0, terra?.valorCentavos ?? 0);
+    const tirMercado = terra ? tirSocios(completos.map((a) => ({ ...a, patrimonio: aMercado(a.ano) }))) : null;
     const plHoje = patrimonio.get(anoAtual) ?? 0;
     return (
       <>
         {cabecalho}
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Numero rotulo={`Aportado pelos sócios desde ${anos[1]}`} valor={`R$ ${reaisCurto(aportadoLiquido)}`} nota="aportes − retiradas (conta Capital Sócio)" />
-          <Numero rotulo="Patrimônio contábil hoje" valor={`R$ ${reaisCurto(plHoje)}`} nota="ativos − dívidas, pelo balanço" />
+          <Numero
+            rotulo="Patrimônio hoje"
+            valor={`R$ ${reaisCurto(terra ? aMercado(anoAtual) : plHoje)}`}
+            nota={terra ? `com o sítio porteira fechada a R$ ${reaisCurto(terra.valorCentavos)}, menos as dívidas · contábil R$ ${reaisCurto(plHoje)}` : "ativos − dívidas, pelo balanço"}
+          />
           <Numero
             rotulo={`Retorno dos sócios ao ano (${anos[0]}–${anoAtual - 1})`}
             valor={taxa(tirContabil)}
             sinal={tirContabil}
-            nota="TIR: aportes e retiradas de cada ano contra o patrimônio no fim, sem a terra"
+            nota="TIR pelo balanço: aportes e retiradas de cada ano contra o patrimônio contábil no fim"
           />
           <Numero
-            rotulo="Retorno com a terra a mercado"
-            valor={taxa(tirComTerra)}
-            sinal={tirComTerra}
-            nota={terra ? `terra de R$ ${reaisCurto(terra.valorCentavos)} no início e no fim (sem valorização)` : "informe o valor de mercado na aba Café"}
+            rotulo="Retorno com o sítio a mercado"
+            valor={taxa(tirMercado)}
+            sinal={tirMercado}
+            nota={
+              terra
+                ? `sítio porteira fechada a R$ ${reaisCurto(terra.valorCentavos)} no início e no fim, no lugar do imobilizado contábil (sem valorização)`
+                : "informe o valor de mercado na aba Café"
+            }
           />
         </div>
         <Cartao className="overflow-x-auto p-5">
@@ -191,8 +200,8 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   const serie = inicio < 0 ? [] : serieTodos.slice(inicio);
   const completos = serie.filter((a) => a.ano < anoAtual);
   const corrente = serie.find((a) => a.ano === anoAtual);
-  const comTerra = nome === DESTINO_INVESTIMENTO_GERAL && terra ? terra.valorCentavos : 0;
-  const r = resumirCultivo(completos, comTerra);
+  const mercado = nome === DESTINO_INVESTIMENTO_GERAL && terra ? terra.valorCentavos : 0;
+  const r = resumirCultivo(completos, mercado);
   const periodo = completos.length ? `${completos[0].ano}–${completos.at(-1)!.ano}` : "";
 
   // Qualidade dos dados para este cultivo.
@@ -247,10 +256,10 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               rotulo="Capital investido hoje"
               valor={r ? `R$ ${reaisCurto(r.capitalHoje)}` : "—"}
               nota={
-                comTerra
-                  ? `bens pelo valor depreciado + terra a mercado R$ ${reaisCurto(comTerra)}`
+                mercado
+                  ? `sítio porteira fechada (terra, lavouras e máquinas) a mercado · contábil R$ ${reaisCurto(completos.at(-1)?.capital ?? 0)}`
                   : nome === DESTINO_INVESTIMENTO_GERAL
-                    ? "bens pelo valor depreciado — falta o valor de mercado da terra (abaixo)"
+                    ? "bens pelo valor depreciado — falta o valor de mercado do sítio (abaixo)"
                     : "bens pelo valor depreciado"
               }
             />
@@ -264,7 +273,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               rotulo={`Retorno ao ano (TIR ${periodo})`}
               valor={taxa(r?.tir ?? null)}
               sinal={r?.tir}
-              nota={comTerra ? "terra no início e no fim pelo mesmo valor; sem valorização" : "sobre o dinheiro investido no período, com o capital que ficou"}
+              nota={mercado ? "sítio a mercado no início e no fim pelo mesmo valor; sem valorização" : "sobre o dinheiro investido no período, com o capital que ficou"}
             />
           </div>
 
@@ -286,14 +295,14 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                   <th className="py-2 text-right font-medium">Margem %</th>
                   <th className="py-2 text-right font-medium">Resultado</th>
                   <th className="py-2 text-right font-medium">Investido</th>
-                  <th className="py-2 text-right font-medium">Capital 31/12</th>
-                  <th className="py-2 text-right font-medium">Retorno s/ capital</th>
+                  <th className="py-2 text-right font-medium">{mercado ? "Bens contábeis 31/12" : "Capital 31/12"}</th>
+                  <th className="py-2 text-right font-medium">{mercado ? `Retorno s/ R$ ${reaisCurto(mercado)}` : "Retorno s/ capital"}</th>
                 </tr>
               </thead>
               <tbody>
                 {serie.map((a, i) => {
                   const anterior = serie[i - 1]?.capital ?? a.capital;
-                  const capitalMedio = (anterior + a.capital) / 2 + comTerra;
+                  const capitalMedio = mercado || (anterior + a.capital) / 2;
                   return (
                     <tr key={a.ano} className={`border-t border-stone-100 ${a.ano === anoAtual ? "text-stone-500" : ""}`}>
                       <td className="py-1.5">
@@ -306,7 +315,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                       <td className="num py-1.5">{a.receita > 0 ? percentual(a.margemDireta, a.receita) : "—"}</td>
                       <td className={`num py-1.5 font-medium ${a.resultado < 0 ? "neg" : ""}`}>{reaisCurto(a.resultado)}</td>
                       <td className="num py-1.5">{a.investimento ? reaisCurto(a.investimento) : ""}</td>
-                      <td className="num py-1.5">{reaisCurto(a.capital + comTerra)}</td>
+                      <td className="num py-1.5">{reaisCurto(a.capital)}</td>
                       <td className={`num py-1.5 ${a.resultado < 0 ? "neg" : ""}`}>{a.ano !== anoAtual && capitalMedio > 0 ? percentual(a.resultado, capitalMedio) : "—"}</td>
                     </tr>
                   );
@@ -320,8 +329,8 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             <Cartao className="mb-6 p-5">
               <h2 className="mb-1 font-semibold text-stone-800">Valor de mercado do sítio</h2>
               <p className="mb-3 text-xs text-stone-500">
-                Terra e benfeitorias pelo valor de venda estimado hoje. Entra como capital do café (decisão de 23/10/2026: investimento geral 100% no café), no
-                início e no fim do período, para o retorno ser comparável a deixar o dinheiro aplicado.
+                Porteira fechada (terra, lavouras e máquinas) pelo valor de venda estimado hoje. Substitui o valor contábil desses bens como capital do café
+                (decisões de 23/10/2026), no início e no fim do período, para o retorno ser comparável a deixar o dinheiro aplicado.
                 {terra && ` Último valor: R$ ${reais(terra.valorCentavos)}, estimado em ${dataBr(terra.data)}.`}
               </p>
               <FormValorTerra valor={terra ? reais(terra.valorCentavos) : ""} data={terra?.data ?? ""} hoje={hoje} />
@@ -356,7 +365,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                 </li>
               )}
               {semMovimento.length > 0 && <li>Anos sem nenhum lançamento deste cultivo: {semMovimento.join(", ")}.</li>}
-              {nome === DESTINO_INVESTIMENTO_GERAL && !terra && <li>Sem o valor de mercado da terra, o capital do café fica só com os bens pelo valor contábil: o capital está subestimado e as taxas de retorno saem distorcidas.</li>}
+              {nome === DESTINO_INVESTIMENTO_GERAL && !terra && <li>Sem o valor de mercado do sítio, o capital do café fica só com os bens pelo valor contábil: o capital está subestimado e as taxas de retorno saem distorcidas.</li>}
               {nome !== DESTINO_INVESTIMENTO_GERAL && (
                 <li>Máquinas, prédios e veículos de uso geral estão todos no café (decisão de 23/10/2026); por isso o capital próprio deste cultivo é só o que foi lançado para ele.</li>
               )}

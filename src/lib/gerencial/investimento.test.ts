@@ -72,8 +72,8 @@ describe("resumirCultivo", () => {
     expect(r.tir).toBeCloseTo(0.1, 6); // −100, depois 10 + 100
   });
 
-  it("com terra: entra no início e no fim pelo mesmo valor", () => {
-    const r = resumirCultivo([ano(2025, 50, 0, 0)], 1000)!;
+  it("com valor de mercado: substitui o capital contábil e entra no início e no fim", () => {
+    const r = resumirCultivo([ano(2025, 50, 0, 400)], 1000)!;
     expect(r.capitalHoje).toBe(1000);
     expect(r.retornoRecente).toBeCloseTo(0.05, 6);
     expect(r.tir).toBeCloseTo(0.05, 6); // −1000, depois 50 + 1000
