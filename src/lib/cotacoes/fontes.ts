@@ -42,6 +42,43 @@ export async function buscarCepea(url: string): Promise<PontoCotacao[]> {
 }
 
 /**
+ * Indicador do CEPEA republicado pelo Notícias Agrícolas (ex.: café arábica):
+ * um bloco "Fechamento: dd/mm/aaaa" por dia, com a tabela Data | Valor R$ | Variação.
+ */
+export function lerIndicadorNoticias(html: string): PontoCotacao[] {
+  const pontos: PontoCotacao[] = [];
+  for (const bloco of html.split(/<div class="fechamento">\s*Fechamento:\s*/).slice(1)) {
+    for (const linha of bloco.slice(0, bloco.indexOf("</table>")).matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+      const [data, valor] = [...linha[1].matchAll(/<td[^>]*>([^<]*)<\/td>/g)].map((m) => m[1].trim());
+      if (!data || !/^\d{2}\/\d{2}\/\d{4}$/.test(data)) continue;
+      const v = numeroBr(valor ?? "");
+      if (Number.isFinite(v) && v > 0) pontos.push({ data: dataBr(data), valor: v });
+    }
+  }
+  if (!pontos.length) throw new Error("Notícias Agrícolas: nenhuma linha de cotação lida (layout mudou?)");
+  return pontos;
+}
+
+/**
+ * Café arábica: o site do CEPEA bloqueia os servidores da Vercel (HTTP 403),
+ * então a fonte principal é o mesmo indicador no Notícias Agrícolas; o CEPEA
+ * direto fica como reserva.
+ */
+export async function buscarCafeArabica(urlNoticias: string, urlCepea: string): Promise<PontoCotacao[]> {
+  try {
+    const resposta = await fetch(urlNoticias, { headers: { "user-agent": AGENTE }, cache: "no-store", signal: AbortSignal.timeout(LIMITE_MS) });
+    if (!resposta.ok) throw new Error(`Notícias Agrícolas: HTTP ${resposta.status}`);
+    return lerIndicadorNoticias(await resposta.text());
+  } catch (e) {
+    try {
+      return await buscarCepea(urlCepea);
+    } catch (e2) {
+      throw new Error(`${e instanceof Error ? e.message : e}; reserva ${e2 instanceof Error ? e2.message : e2}`);
+    }
+  }
+}
+
+/**
  * "Indicador da Vaca" (Datagro) publicado pelo Notícias Agrícolas: a página traz
  * vários dias, cada um num bloco "Fechamento: dd/mm/aaaa" seguido de uma tabela
  * Estado | R$/@ | Variação | US$/@. Devolve o valor do estado pedido em cada dia.

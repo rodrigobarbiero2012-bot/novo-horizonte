@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lerIndicadorVaca, lerMaracujaCeasa, lerPtax, lerTabelaCepea } from "./fontes";
+import { lerIndicadorNoticias, lerIndicadorVaca, lerMaracujaCeasa, lerPtax, lerTabelaCepea } from "./fontes";
 
 // Trecho no formato real da página do CEPEA (indicador principal + uma segunda tabela que deve ser ignorada).
 const HTML_CEPEA = `
@@ -30,6 +30,31 @@ describe("lerTabelaCepea", () => {
 
   it("falha de forma explícita se o layout mudar", () => {
     expect(() => lerTabelaCepea("<html>nada aqui</html>")).toThrow(/não encontrada/);
+  });
+});
+
+// Formato da página do Notícias Agrícolas (um bloco por dia).
+const HTML_NOTICIAS_CAFE = `
+<div class="cotacao"><div class="title-descricao"><div class="fechamento">Fechamento: 22/10/2026</div></div>
+<table class="cot-fisicas"><thead class="head-box"><tr><th>Data</th><th>Valor R$</th><th>Variação(%)</th></tr></thead>
+<tbody class="body-box"><tr>
+  <td>22/10/2026</td>
+  <td>1.619,85</td>
+  <td>-0,07%</td>
+</tr></tbody></table></div>
+<div class="cotacao"><div class="fechamento">Fechamento: 21/10/2026</div>
+<table><tbody><tr><td>21/10/2026</td><td>1.620,92</td><td>0,67%</td></tr></tbody></table></div>`;
+
+describe("lerIndicadorNoticias", () => {
+  it("lê data e valor de cada dia", () => {
+    expect(lerIndicadorNoticias(HTML_NOTICIAS_CAFE)).toEqual([
+      { data: "2026-10-22", valor: 1619.85 },
+      { data: "2026-10-21", valor: 1620.92 },
+    ]);
+  });
+
+  it("falha de forma explícita se o layout mudar", () => {
+    expect(() => lerIndicadorNoticias("<html>nada</html>")).toThrow(/layout mudou/);
   });
 });
 
