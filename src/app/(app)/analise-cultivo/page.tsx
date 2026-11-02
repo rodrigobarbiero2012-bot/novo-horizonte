@@ -7,9 +7,23 @@ import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
 import { hojeSP } from "@/lib/hoje";
-import { cdiMedioAnual, CUSTEIO_COMO_INVESTIMENTO, DESTINO_CUSTEIO_GERAL, DESTINO_INVESTIMENTO_GERAL, resumirCultivo, retornoDosSocios, serieInvestimento, valorNoCdi, type AnoCultivo } from "@/lib/gerencial/investimento";
-import { cdiMensal, rateioManual, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
-import { CRITERIOS, ehCriterio, type AtividadeRateio, type Criterio } from "@/lib/gerencial/rateio";
+import { dividaEm } from "@/lib/contabil/painel";
+import {
+  cdiMedioAnual,
+  custosPorConta,
+  CUSTEIO_COMO_INVESTIMENTO,
+  DESTINO_CUSTEIO_GERAL,
+  DESTINO_INVESTIMENTO_GERAL,
+  indicadoresCultivo,
+  resumirCultivo,
+  retornoDosSocios,
+  saudeFinanceira,
+  serieInvestimento,
+  valorNoCdi,
+  type AnoCultivo,
+} from "@/lib/gerencial/investimento";
+import { cdiMensal, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
+import type { AtividadeRateio } from "@/lib/gerencial/rateio";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type SlugProducao } from "@/lib/producao/atividades";
 import { exigirUsuario } from "@/lib/usuario";
 
@@ -74,22 +88,20 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   await exigirUsuario();
   const busca = await searchParams;
   const aba = typeof busca.cultivo === "string" && (ehSlugProducao(busca.cultivo) || busca.cultivo === "socios") ? busca.cultivo : "cafe";
-  const criterio: Criterio = ehCriterio(busca.criterio) ? busca.criterio : "receita";
   const hoje = hojeSP();
   const anoAtual = Number(hoje.slice(0, 4));
 
-  const [partidas, anos, taxas, manual, terra, talhoes, colheitas, cdi] = await Promise.all([
+  const [partidas, anos, taxas, terra, talhoes, colheitas, cdi] = await Promise.all([
     partidasDoRazao(),
     anosComMovimento(),
     taxasDepreciacao(),
-    rateioManual(),
     valorTerra(),
     prisma.talhao.groupBy({ by: ["atividade"], where: { ativo: true }, _sum: { areaHa: true } }),
     prisma.movimentoProducao.groupBy({ by: ["atividade"], where: { tipo: { in: ["COLHEITA", "NASCIMENTO"] } }, _count: true }),
     cdiMensal(),
   ]);
   const anosAnalise = anos.filter((a) => a > anos[0]); // o 1º ano só tem saldos iniciais
-  const href = (cultivo: string, c: Criterio = criterio) => `/analise-cultivo?cultivo=${cultivo}${c === "receita" ? "" : `&criterio=${c}`}`;
+  const href = (cultivo: string) => `/analise-cultivo?cultivo=${cultivo}`;
 
   const cabecalho = (
     <>
@@ -105,12 +117,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             { valor: "socios", rotulo: "Sítio todo (sócios)", href: href("socios") },
           ]}
         />
-        {aba !== "socios" && (
-          <span className="flex flex-wrap items-center gap-2 text-sm text-stone-600">
-            Despesas administrativas e financeiras divididas:
-            <Abas atual={criterio} opcoes={Object.entries(CRITERIOS).map(([c, r]) => ({ valor: c, rotulo: r.replace("Proporcional ao ", "pelo ").replace("Proporcional à ", "pela "), href: href(aba, c as Criterio) }))} />
-          </span>
-        )}
+
       </div>
     </>
   );
@@ -121,6 +128,18 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
     const { completos, corrente, aportadoLiquido, tirContabil, tirMercado, plHoje, fim, noCdi, cdiPeriodo, semSitio, tirCom, empate } = s;
     const aMercado = () => s.patrimonioMercadoHoje ?? plHoje;
     const patrimonio = new Map([...completos, corrente].map((a) => [a.ano, a.patrimonio]));
+    // Saúde financeira do sítio (anos fechados).
+    const saude = saudeFinanceira(partidas, anos).filter((x) => x.ano > anos[0] && x.ano < anoAtual);
+    const ultimaSaude = saude.at(-1);
+    const ebitdaMedio3 = saude.slice(-3).reduce((soma, x) => soma + x.ebitda, 0) / Math.max(1, saude.slice(-3).length);
+    const divida = dividaEm(partidas, hoje);
+    const dividaPorEbitda = ebitdaMedio3 > 0 ? divida / ebitdaMedio3 : null;
+    const tres = saude.slice(-3);
+    const juros3 = tres.reduce((soma, x) => soma + x.juros, 0);
+    const cobertura = juros3 > 0 ? tres.reduce((soma, x) => soma + x.ebitda, 0) / juros3 : null;
+    const anosSemJuros = tres.filter((x) => x.juros === 0).map((x) => x.ano);
+    const rendimento = terra && ebitdaMedio3 ? ebitdaMedio3 / terra.valorCentavos : null;
+    const vezes = (v: number | null) => (v === null ? "—" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}×`);
     return (
       <>
         {cabecalho}
@@ -148,6 +167,34 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             }
           />
         </div>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Saúde financeira do sítio</h2>
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Numero
+            rotulo="EBITDA médio (últimos 3 anos)"
+            valor={saude.length ? `R$ ${reaisCurto(ebitdaMedio3)}` : "—"}
+            sinal={ebitdaMedio3}
+            nota={ultimaSaude ? `${ultimaSaude.ano}: R$ ${reaisCurto(ultimaSaude.ebitda)} · receita − custeio − despesas administrativas, antes dos juros` : undefined}
+          />
+          <Numero
+            rotulo="Dívida bancária ÷ EBITDA"
+            valor={dividaPorEbitda === null ? (divida > 0 ? "EBITDA negativo" : "—") : vezes(dividaPorEbitda)}
+            sinal={dividaPorEbitda === null ? (divida > 0 ? -1 : null) : 3 - dividaPorEbitda}
+            nota={`dívida hoje R$ ${reaisCurto(divida)} · em quantos anos de geração de caixa ela seria paga; até 2–3× costuma ser considerado confortável`}
+          />
+          <Numero
+            rotulo="Cobertura de juros (últimos 3 anos)"
+            valor={vezes(cobertura)}
+            sinal={cobertura === null ? null : cobertura - 1}
+            nota={`EBITDA ÷ juros pagos (R$ ${reaisCurto(juros3)} em ${tres.map((x) => x.ano).join(", ")}); abaixo de 1× a operação não paga os juros${anosSemJuros.length ? `. Sem juros lançados em ${anosSemJuros.join(", ")}: a cobertura real é menor` : ""}`}
+          />
+          <Numero
+            rotulo="Rendimento operacional do patrimônio"
+            valor={rendimento === null ? "—" : `${taxa(rendimento)} ao ano`}
+            sinal={rendimento}
+            nota={terra ? `EBITDA médio ÷ sítio a R$ ${reaisCurto(terra.valorCentavos)}: quanto o patrimônio rende só com a operação (CDI no período: ${taxa(cdiPeriodo)})` : "informe o valor de mercado na aba Café"}
+          />
+        </div>
+
         {noCdi !== null && (
           <Cartao className="mb-6 overflow-x-auto p-5">
             <h2 className="mb-1 font-semibold text-stone-800">Vale a pena? O sítio comparado ao CDI</h2>
@@ -249,7 +296,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   const slug = aba as SlugProducao;
   const nome = NOME[slug];
   const def = ATIVIDADES_PRODUCAO[slug];
-  const serieTodos = serieInvestimento(partidas, anosAnalise, taxas, criterio, manual)[nome];
+  const serieTodos = serieInvestimento(partidas, anosAnalise, taxas)[nome];
   // Começa no primeiro ano em que o cultivo teve algum movimento.
   const inicio = serieTodos.findIndex((a) => a.receita || a.custeio || a.investimento || a.capital);
   const serie = inicio < 0 ? [] : serieTodos.slice(inicio);
@@ -271,6 +318,51 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   const fimCultivo = completos.at(-1)?.ano ?? anoAtual - 1;
   const cultivoNoCdi = r?.tir !== null && r ? valorNoCdi(completos.map((a) => ({ ano: a.ano, valor: -a.caixa })), cdi, fimCultivo) : null;
   const cdiCultivo = completos.length ? cdiMedioAnual(cdi, completos[0].ano, fimCultivo) : null;
+  // Indicadores de gestão (anos fechados).
+  const ind = r ? indicadoresCultivo(completos, r.capitalHoje) : null;
+  // Múltiplo só com capital de verdade (investimento lançado ou valor de mercado), como a TIR.
+  const multiplo = ind && !semBaseTir ? ind.multiplo : null;
+  const ultimo = completos.at(-1)?.ano ?? null;
+  const custosUltimo = ultimo ? custosPorConta(partidas, nome, ultimo) : new Map<string, number>();
+  const custosAnterior = ultimo ? custosPorConta(partidas, nome, ultimo - 1) : new Map<string, number>();
+  const totalCustosUltimo = [...custosUltimo.values()].reduce((s, v) => s + v, 0);
+  const estruturaCustos = [...custosUltimo]
+    .map(([conta, valor]) => ({ conta, valor, anterior: custosAnterior.get(conta) ?? 0 }))
+    .filter((c) => c.valor > 0)
+    .sort((a, b) => b.valor - a.valor);
+  const principais = estruturaCustos.slice(0, 8);
+  const outros = estruturaCustos.slice(8);
+  if (outros.length) principais.push({ conta: `Outras ${outros.length} contas`, valor: outros.reduce((s, c) => s + c.valor, 0), anterior: outros.reduce((s, c) => s + c.anterior, 0) });
+  const ano = (a: AnoCultivo | null | undefined) => (a ? `${a.ano} (R$ ${reaisCurto(a.resultado)})` : "—");
+
+  // Leitura rápida: o que um analista diria olhando estes números.
+  const leitura: { texto: string; tom: "bom" | "ruim" | "neutro" }[] = [];
+  if (r && ind) {
+    if (r.tir !== null && cdiCultivo !== null)
+      leitura.push({
+        texto: `Retorno de ${taxa(r.tir)} ao ano${mercado ? " (com a valorização do sítio)" : ""}, contra ${taxa(cdiCultivo)} do CDI no mesmo período.`,
+        tom: r.tir >= cdiCultivo ? "bom" : "ruim",
+      });
+    if (retornoAgora !== null)
+      leitura.push({
+        texto: `Só a operação rende ${taxa(retornoAgora)} ao ano sobre o capital de hoje (média dos últimos 3 anos)${cdiCultivo !== null && retornoAgora < cdiCultivo ? (mercado ? ": abaixo do CDI, o ganho tem vindo da valorização do patrimônio" : ": abaixo do CDI") : ""}.`,
+        tom: cdiCultivo !== null && retornoAgora >= cdiCultivo ? "bom" : "ruim",
+      });
+    leitura.push({
+      texto: `Lucro em ${ind.anosComLucro} de ${ind.anos} anos. Melhor ano: ${ano(ind.melhor)}; pior: ${ano(ind.pior)}.`,
+      tom: ind.anosComLucro * 2 >= ind.anos ? "neutro" : "ruim",
+    });
+    if (ind.crescimentoReceita !== null && ind.crescimentoCusteio !== null)
+      leitura.push({
+        texto: `Receita cresce ${taxa(ind.crescimentoReceita)} ao ano e o custo direto ${taxa(ind.crescimentoCusteio)} ao ano${ind.crescimentoCusteio > ind.crescimentoReceita ? ": os custos sobem mais rápido que a receita e comprimem a margem" : ": a receita cresce mais rápido que os custos"}.`,
+        tom: ind.crescimentoCusteio > ind.crescimentoReceita ? "ruim" : "bom",
+      });
+    if (estruturaCustos[0] && totalCustosUltimo > 0)
+      leitura.push({
+        texto: `Maior custo em ${ultimo}: ${estruturaCustos[0].conta.replace(/^Custeio (com |em )?/, "")} (${percentual(estruturaCustos[0].valor, totalCustosUltimo)} do custo direto)${estruturaCustos[1] ? `, seguido de ${estruturaCustos[1].conta.replace(/^Custeio (com |em )?/, "")} (${percentual(estruturaCustos[1].valor, totalCustosUltimo)})` : ""}.`,
+        tom: "neutro",
+      });
+  }
 
   // Qualidade dos dados para este cultivo.
   const semMovimento = completos.filter((a) => !a.receita && !a.custeio).map((a) => a.ano);
@@ -287,63 +379,72 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
         <Cartao className="p-5 text-sm text-stone-600">Sem receita, custo ou investimento lançados para {nome.toLowerCase()} até agora.</Cartao>
       ) : (
         <>
-          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {leitura.length > 0 && (
+            <Cartao className="mb-6 p-5">
+              <h2 className="mb-2 font-semibold text-stone-800">Leitura rápida — {nome}</h2>
+              <ul className="space-y-1.5 text-sm">
+                {leitura.map((l) => (
+                  <li key={l.texto} className="flex gap-2">
+                    <span className={l.tom === "bom" ? "text-folha-700" : l.tom === "ruim" ? "text-red-700" : "text-stone-400"}>{l.tom === "bom" ? "▲" : l.tom === "ruim" ? "▼" : "•"}</span>
+                    <span className="text-stone-700">{l.texto}</span>
+                  </li>
+                ))}
+              </ul>
+            </Cartao>
+          )}
+
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Rentabilidade · {periodo}</h2>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Numero
-              rotulo={`Resultado acumulado ${periodo}`}
+              rotulo="Resultado acumulado"
               valor={r ? `R$ ${reaisCurto(r.resultadoAcumulado)}` : "—"}
               sinal={r?.resultadoAcumulado}
-              nota={
-                r ? (
-                  <>
-                    margem de {taxa(r.margemMedia)} sobre R$ {reaisCurto(r.receitaAcumulada)} de receita
-                    <span className="block">
-                      antes dos custos comuns (margem direta): <span className={r.margemDiretaAcumulada < 0 ? "neg" : "text-folha-700"}>R$ {reaisCurto(r.margemDiretaAcumulada)}</span>
-                    </span>
-                  </>
-                ) : undefined
-              }
+              nota={r ? `margem líquida de ${taxa(r.margemMedia)} sobre R$ ${reaisCurto(r.receitaAcumulada)} de receita` : undefined}
             />
             <Numero
-              rotulo={`Investido ${ateHoje}`}
-              valor={`R$ ${reaisCurto(investidoAteHoje)}`}
-              nota={
-                nome === DESTINO_INVESTIMENTO_GERAL
-                  ? "imobilizado do café + máquinas, prédios, benfeitorias e veículos de uso geral"
-                  : nome === "Pecuária"
-                    ? "compra de animais (estoque) e bens da pecuária"
-                    : CUSTEIO_COMO_INVESTIMENTO.some((c) => c.cultivo === nome)
-                      ? `bens do cultivo + formação de lavoura lançada como custeio (${CUSTEIO_COMO_INVESTIMENTO.filter((c) => c.cultivo === nome)
-                          .map((c) => `${c.conta.replace(/^Custeio /, "")} ${c.ano}`)
-                          .join(", ")})`
-                      : "bens lançados para este cultivo"
-              }
+              rotulo="Margem direta"
+              valor={taxa(ind?.margemDiretaMedia ?? null)}
+              sinal={ind?.margemDiretaMedia}
+              nota={r ? `R$ ${reaisCurto(r.margemDiretaAcumulada)}: receita − custo direto − depreciação, antes das despesas comuns` : undefined}
             />
             <Numero
-              rotulo={`Caixa gerado − investido ${periodo}`}
-              valor={r ? `R$ ${reaisCurto(r.caixaAcumulado)}` : "—"}
-              sinal={r?.caixaAcumulado}
-              nota="resultado + depreciação − investimentos, somados no período"
+              rotulo="EBITDA acumulado"
+              valor={ind ? `R$ ${reaisCurto(ind.ebitdaAcumulado)}` : "—"}
+              sinal={ind?.ebitdaAcumulado}
+              nota={ind ? `margem EBITDA de ${taxa(ind.margemEbitda)}: o caixa que a operação gera antes de juros e depreciação` : undefined}
             />
+            <Numero
+              rotulo="EBITDA médio (últimos 3 anos)"
+              valor={ind ? `R$ ${reaisCurto(ind.ebitdaMedio3)}` : "—"}
+              sinal={ind?.ebitdaMedio3}
+              nota={`média de ${recentes.map((a) => a.ano).join(", ")}`}
+            />
+          </div>
+
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Retorno do capital</h2>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Numero
               rotulo={mercado ? "Valor de mercado (porteira fechada)" : "Capital investido hoje"}
               valor={`R$ ${reaisCurto(capitalAgora)}`}
               nota={
                 mercado
                   ? `investido pelos sócios desde ${anos[1]} (aportes − retiradas): R$ ${reaisCurto(aportadoSocios)} · valorização de R$ ${reaisCurto(mercado - aportadoSocios)}`
-                  : nome === DESTINO_INVESTIMENTO_GERAL
-                    ? "bens pelo valor depreciado — falta o valor de mercado do sítio (abaixo)"
-                    : corrente?.investimento
-                      ? `inclui R$ ${reaisCurto(corrente.investimento)} investidos em ${anoAtual}`
-                      : "bens pelo valor depreciado"
+                  : `investido ${ateHoje}: R$ ${reaisCurto(investidoAteHoje)} (${
+                      nome === "Pecuária"
+                        ? "compra de animais e bens da pecuária"
+                        : CUSTEIO_COMO_INVESTIMENTO.some((c) => c.cultivo === nome)
+                          ? "bens do cultivo + formação de lavoura lançada como custeio"
+                          : "bens lançados para este cultivo"
+                    })`
               }
             />
             <Numero
-              rotulo="Retorno sobre o capital"
+              rotulo="Retorno da operação sobre o capital"
               valor={taxa(retornoAgora)}
               sinal={retornoAgora}
               nota={
                 capitalAgora > 0
-                  ? `resultado médio de ${recentes.map((a) => a.ano).join(", ")} ÷ capital investido hoje (só a operação, sem valorização)`
+                  ? `resultado médio de ${recentes.map((a) => a.ano).join(", ")} ÷ capital de hoje (sem valorização)`
                   : "sem capital investido lançado: não há base para o retorno"
               }
             />
@@ -359,8 +460,21 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                     : "sobre o dinheiro investido no período, com o capital que ficou"
               }
             />
+            <Numero
+              rotulo="Múltiplo do capital"
+              valor={multiplo !== null ? `${multiplo.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}×` : "—"}
+              sinal={multiplo !== null ? multiplo - 1 : null}
+              nota={
+                multiplo !== null && ind
+                  ? `cada R$ 1 que o cultivo consumiu virou R$ ${multiplo.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} (valor de hoje + caixa devolvido). ${
+                      ind.payback ? `Caixa recuperado pela operação em ${ind.payback}.` : "A operação sozinha ainda não devolveu o caixa colocado."
+                    }`
+                  : semBaseTir
+                    ? "sem investimento lançado no período: o múltiplo não tem base"
+                    : "o cultivo não consumiu caixa no período"
+              }
+            />
           </div>
-
           {r && cultivoNoCdi !== null && (
             <Cartao className="mb-6 p-5 text-sm">
               <h2 className="mb-1 font-semibold text-stone-800">Vale a pena? {nome} comparado ao CDI</h2>
@@ -399,23 +513,97 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
             </Cartao>
           )}
 
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Crescimento e consistência · {periodo}</h2>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Numero
+              rotulo="Crescimento da receita"
+              valor={ind?.crescimentoReceita !== null && ind?.crescimentoReceita !== undefined ? `${taxa(ind.crescimentoReceita)} ao ano` : "—"}
+              sinal={ind?.crescimentoReceita}
+              nota={completos.length >= 6 ? "médias de 3 anos nas pontas (o café alterna safra cheia e fraca)" : "do primeiro ao último ano fechado"}
+            />
+            <Numero
+              rotulo="Crescimento do custo direto"
+              valor={ind?.crescimentoCusteio !== null && ind?.crescimentoCusteio !== undefined ? `${taxa(ind.crescimentoCusteio)} ao ano` : "—"}
+              sinal={ind && ind.crescimentoCusteio !== null && ind.crescimentoReceita !== null ? ind.crescimentoReceita - ind.crescimentoCusteio : null}
+              nota={
+                ind && ind.crescimentoCusteio !== null && ind.crescimentoReceita !== null
+                  ? ind.crescimentoCusteio > ind.crescimentoReceita
+                    ? "acima da receita: a margem está sendo comprimida"
+                    : "abaixo da receita: a margem está crescendo"
+                  : undefined
+              }
+            />
+            <Numero
+              rotulo="Anos com lucro"
+              valor={ind ? `${ind.anosComLucro} de ${ind.anos}` : "—"}
+              sinal={ind ? ind.anosComLucro * 2 - ind.anos : null}
+              nota="resultado gerencial positivo (depois das despesas comuns)"
+            />
+            <Numero rotulo="Melhor e pior ano" valor={ind?.melhor ? String(ind.melhor.ano) : "—"} nota={ind ? `melhor: ${ano(ind.melhor)} · pior: ${ano(ind.pior)}` : undefined} />
+          </div>
           <Cartao className="mb-6 p-5">
             <h2 className="font-semibold text-stone-800">Resultado gerencial por ano — {nome}</h2>
             <p className="mb-2 text-xs text-stone-500">Depois do custo direto, da depreciação e da parte dos custos comuns. Passe o mouse para ver os valores.</p>
             <GraficoResultado anos={serie} anoAtual={anoAtual} />
           </Cartao>
 
+          {principais.length > 0 && (
+            <Cartao className="mb-6 overflow-x-auto p-5">
+              <h2 className="mb-1 font-semibold text-stone-800">Para onde vai o dinheiro — custo direto de {ultimo}</h2>
+              <p className="mb-3 text-xs text-stone-500">Contas de custeio do cultivo no último ano fechado, comparadas com {ultimo! - 1}.</p>
+              <table className="w-full min-w-[36rem] text-sm">
+                <thead className="text-xs text-stone-500">
+                  <tr className="border-b border-stone-200">
+                    <th className="py-2 text-left font-medium">Conta</th>
+                    <th className="py-2 text-right font-medium">{ultimo}</th>
+                    <th className="w-40 py-2 pl-4 text-left font-medium">% do custo direto</th>
+                    <th className="py-2 text-right font-medium">{ultimo! - 1}</th>
+                    <th className="py-2 text-right font-medium">Variação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {principais.map((c) => (
+                    <tr key={c.conta} className="border-t border-stone-100">
+                      <td className="py-1.5">{c.conta.replace(/^Custeio (com |em )?/, "")}</td>
+                      <td className="num py-1.5">{reaisCurto(c.valor)}</td>
+                      <td className="py-1.5 pl-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 flex-1 rounded-full bg-stone-100">
+                            <div className="h-2 rounded-full bg-folha-600" style={{ width: `${Math.min(100, (c.valor / totalCustosUltimo) * 100)}%` }} />
+                          </div>
+                          <span className="w-12 text-right text-xs tabular-nums text-stone-600">{percentual(c.valor, totalCustosUltimo)}</span>
+                        </div>
+                      </td>
+                      <td className="num py-1.5 text-stone-500">{c.anterior ? reaisCurto(c.anterior) : "—"}</td>
+                      <td className={`num py-1.5 ${c.anterior && c.valor > c.anterior ? "neg" : "text-folha-700"}`}>
+                        {c.anterior > 0 ? `${c.valor >= c.anterior ? "+" : "−"}${percentual(Math.abs(c.valor - c.anterior), c.anterior)}` : "novo"}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t border-stone-200 font-medium">
+                    <td className="py-1.5">Total</td>
+                    <td className="num py-1.5">{reaisCurto(totalCustosUltimo)}</td>
+                    <td />
+                    <td className="num py-1.5 text-stone-500">{reaisCurto([...custosAnterior.values()].reduce((s, v) => s + v, 0))}</td>
+                    <td />
+                  </tr>
+                </tbody>
+              </table>
+            </Cartao>
+          )}
           <Cartao className="mb-6 overflow-x-auto p-5">
             <h2 className="mb-3 font-semibold text-stone-800">Ano a ano</h2>
-            <table className="w-full min-w-[56rem] text-sm">
+            <table className="w-full min-w-[68rem] text-sm">
               <thead className="text-xs text-stone-500">
                 <tr className="border-b border-stone-200">
                   <th className="py-2 text-left font-medium">Ano</th>
                   <th className="py-2 text-right font-medium">Receita</th>
                   <th className="py-2 text-right font-medium">Custo direto</th>
                   <th className="py-2 text-right font-medium">Margem direta</th>
-                  <th className="py-2 text-right font-medium">Margem %</th>
+                  <th className="py-2 text-right font-medium">Margem direta %</th>
+                  <th className="py-2 text-right font-medium">EBITDA</th>
                   <th className="py-2 text-right font-medium">Resultado</th>
+                  <th className="py-2 text-right font-medium">Margem líquida %</th>
                   <th className="py-2 text-right font-medium">Investido</th>
                   <th className="py-2 text-right font-medium">{mercado ? "Bens 31/12 (após depreciação)" : "Capital 31/12"}</th>
                   <th className="py-2 text-right font-medium">{mercado ? `Retorno s/ R$ ${reaisCurto(mercado)}` : "Retorno s/ capital"}</th>
@@ -435,7 +623,9 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                       <td className="num py-1.5">{reaisCurto(a.custeio)}</td>
                       <td className={`num py-1.5 ${a.margemDireta < 0 ? "neg" : ""}`}>{reaisCurto(a.margemDireta)}</td>
                       <td className="num py-1.5">{a.receita > 0 ? percentual(a.margemDireta, a.receita) : "—"}</td>
+                      <td className={`num py-1.5 ${a.ebitda < 0 ? "neg" : ""}`}>{reaisCurto(a.ebitda)}</td>
                       <td className={`num py-1.5 font-medium ${a.resultado < 0 ? "neg" : ""}`}>{reaisCurto(a.resultado)}</td>
+                      <td className="num py-1.5">{a.receita > 0 ? percentual(a.resultado, a.receita) : "—"}</td>
                       <td className="num py-1.5">{a.investimento ? reaisCurto(a.investimento) : ""}</td>
                       <td className="num py-1.5">{reaisCurto(a.capital)}</td>
                       <td className={`num py-1.5 ${a.resultado < 0 ? "neg" : ""}`}>{a.ano !== anoAtual && capitalMedio > 0 ? percentual(a.resultado, capitalMedio) : "—"}</td>
@@ -461,8 +651,10 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
           )}
 
           <Cartao className="p-5 text-sm">
-            <h2 className="mb-2 font-semibold text-stone-800">O que ainda limita esta análise</h2>
+            <h2 className="mb-2 font-semibold text-stone-800">Como ler e o que ainda limita esta análise</h2>
             <ul className="list-disc space-y-1 pl-5 text-stone-700">
+              <li>Despesas administrativas e financeiras são divididas entre os cultivos pela receita de cada um. O custeio sem cultivo vai para o café.</li>
+              <li>EBITDA = resultado + depreciação + juros: o caixa que a operação gera antes de pagar juros e repor máquinas.</li>
               {!area && (
                 <li>
                   Sem área cadastrada: falta o resultado por hectare. Cadastre em{" "}

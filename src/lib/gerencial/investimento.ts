@@ -1,5 +1,5 @@
 import { ehEstoqueAnimais } from "../contabil/painel";
-import { balancoAnual } from "../contabil/relatorios";
+import { balancoAnual, dreAnual } from "../contabil/relatorios";
 import type { Atividade, PartidaContabil } from "../contabil/tipos";
 import { depreciacaoNoAno, type Camada } from "./depreciacao";
 import { ATIVIDADES_RATEIO, ehAtividadeRateio, resultadoPorAtividade, type AtividadeRateio, type Criterio } from "./rateio";
@@ -36,6 +36,21 @@ export const CUSTEIO_COMO_INVESTIMENTO: { conta: string; ano: number; cultivo: A
  */
 export const DESTINO_CUSTEIO_GERAL: AtividadeRateio = "Café";
 
+/**
+ * Despesas administrativas e financeiras: divididas pela receita de cada
+ * cultivo (decisão do Rodrigo em 02/11/2026: sem seletor de critério na tela).
+ */
+export const CRITERIO_ANALISE: Criterio = "receita";
+
+/**
+ * Partidas como a análise as enxerga: sem o custeio reclassificado como
+ * investimento e com o custeio geral no cultivo de destino.
+ */
+export const partidasGerenciais = (partidas: PartidaContabil[]) =>
+  partidas
+    .filter((p) => !investimentoEmCusteio(p))
+    .map((p) => (p.categoria === "Custeio" && !ehAtividadeRateio(p.atividade) ? { ...p, atividade: DESTINO_CUSTEIO_GERAL as Atividade } : p));
+
 /** Cultivo que recebe a partida como investimento, se ela for um custeio reclassificado. */
 export const investimentoEmCusteio = (p: PartidaContabil): AtividadeRateio | null =>
   (p.categoria === "Custeio" && CUSTEIO_COMO_INVESTIMENTO.find((c) => c.conta === p.conta && p.data.startsWith(`${c.ano}-`))?.cultivo) || null;
@@ -50,6 +65,10 @@ export type AnoCultivo = {
   margemDireta: number; // receita − custeio − depreciação dos bens do cultivo
   resultado: number; // margem direta − custos comuns rateados
   depreciacao: number;
+  /** Despesas financeiras (juros) na parte do cultivo. */
+  juros: number;
+  /** Geração de caixa da operação antes de juros e depreciação: resultado + depreciação + juros. */
+  ebitda: number;
   investimento: number; // imobilizado comprado (no gado, animais; custeio reclassificado como formação) no ano
   capital: number; // imobilizado líquido de depreciação (+ rebanho e formação de lavoura) em 31/12
   /** Caixa da operação no ano: resultado + depreciação − investimento. */
@@ -66,8 +85,8 @@ export function serieInvestimento(
   partidas: PartidaContabil[],
   anos: number[],
   taxas: TaxaImobilizado[],
-  criterio: Criterio,
-  manual: Por,
+  criterio: Criterio = CRITERIO_ANALISE,
+  manual: Por = zeros(),
 ): Record<AtividadeRateio, AnoCultivo[]> {
   // Camadas de cada bem por conta e por cultivo dono (a linha pode ter sido marcada com um cultivo diferente do da conta).
   const camadas = new Map<string, { conta: string; dono: AtividadeRateio; camadas: Camada[] }>();
@@ -82,9 +101,7 @@ export function serieInvestimento(
   const taxaDaConta = new Map(taxas.map((t) => [t.nome, t.taxa]));
   const serie = Object.fromEntries(ATIVIDADES_RATEIO.map((a) => [a, [] as AnoCultivo[]])) as Record<AtividadeRateio, AnoCultivo[]>;
   // O resultado sai sem o custeio reclassificado como investimento, e com o custeio geral no cultivo de destino.
-  const operacionais = partidas
-    .filter((p) => !investimentoEmCusteio(p))
-    .map((p) => (p.categoria === "Custeio" && !ehAtividadeRateio(p.atividade) ? { ...p, atividade: DESTINO_CUSTEIO_GERAL as Atividade } : p));
+  const operacionais = partidasGerenciais(partidas);
 
   for (const ano of [...anos].sort((x, y) => x - y)) {
     const depreciacao = zeros();
@@ -122,6 +139,8 @@ export function serieInvestimento(
         margemDireta: r.margemDireta[a],
         resultado: r.resultado[a],
         depreciacao: depreciacao[a],
+        juros: r.rateado.despesasFinanceiras[a],
+        ebitda: r.resultado[a] + depreciacao[a] + r.rateado.despesasFinanceiras[a],
         investimento: investimento[a],
         capital: liquido[a] + semDepreciacao[a],
         caixa: r.resultado[a] + depreciacao[a] - investimento[a],
@@ -322,4 +341,101 @@ export function retornoDosSocios(partidas: PartidaContabil[], anos: number[], an
     cdiPeriodo: completos.length > 1 ? cdiMedioAnual(cdi, completos[1].ano, fim) : null,
     empate: noCdi !== null ? noCdi - semSitio : null, // valor do sítio que empata com o CDI
   };
+}
+// ---------------- Indicadores de gestão de um cultivo ----------------
+
+const media = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
+
+/**
+ * Crescimento anual composto entre o começo e o fim da série. Com 6 anos ou
+ * mais, compara médias de 3 anos nas pontas (o café tem bienalidade: um ano
+ * bom e um fraco). Null sem base positiva.
+ */
+export function crescimentoAnual(valores: number[]): number | null {
+  const n = valores.length;
+  if (n < 2) return null;
+  const [ini, fim, distancia] = n >= 6 ? [media(valores.slice(0, 3)), media(valores.slice(-3)), n - 3] : [valores[0], valores[n - 1], n - 1];
+  if (ini <= 0 || fim <= 0) return null;
+  return (fim / ini) ** (1 / distancia) - 1;
+}
+
+export type IndicadoresCultivo = {
+  anosComLucro: number;
+  anos: number;
+  melhor: AnoCultivo | null;
+  pior: AnoCultivo | null;
+  crescimentoReceita: number | null;
+  crescimentoCusteio: number | null;
+  margemDiretaMedia: number | null; // margem direta acumulada ÷ receita acumulada
+  ebitdaAcumulado: number;
+  margemEbitda: number | null;
+  ebitdaMedio3: number; // média dos 3 últimos anos fechados
+  /** Múltiplo do capital: (valor hoje + caixa devolvido) ÷ caixa colocado. "Cada R$ 1 virou R$ x." */
+  multiplo: number | null;
+  /** Ano em que o caixa acumulado da operação voltou a ficar positivo; null se nunca. */
+  payback: number | null;
+  caixaColocado: number;
+};
+
+/** Indicadores dos anos fechados de um cultivo. `valorHoje` = capital de hoje (mercado ou contábil). */
+export function indicadoresCultivo(completos: AnoCultivo[], valorHoje: number): IndicadoresCultivo {
+  const comReceita = completos.filter((a) => a.receita > 0);
+  const receita = completos.reduce((s, a) => s + a.receita, 0);
+  const ebitdaAcumulado = completos.reduce((s, a) => s + a.ebitda, 0);
+  const colocado = completos.reduce((s, a) => s + Math.max(0, -a.caixa), 0);
+  const devolvido = completos.reduce((s, a) => s + Math.max(0, a.caixa), 0);
+  let acumulado = 0;
+  let jaNegativo = false;
+  let payback: number | null = null;
+  for (const a of completos) {
+    acumulado += a.caixa;
+    if (acumulado < 0) {
+      jaNegativo = true;
+      payback = null;
+    } else if (jaNegativo && payback === null) payback = a.ano;
+  }
+  const porResultado = [...completos].sort((a, b) => b.resultado - a.resultado);
+  return {
+    anosComLucro: completos.filter((a) => a.resultado > 0).length,
+    anos: completos.length,
+    melhor: porResultado[0] ?? null,
+    pior: porResultado.at(-1) ?? null,
+    crescimentoReceita: crescimentoAnual(comReceita.map((a) => a.receita)),
+    crescimentoCusteio: crescimentoAnual(comReceita.map((a) => a.custeio)),
+    margemDiretaMedia: receita > 0 ? completos.reduce((s, a) => s + a.margemDireta, 0) / receita : null,
+    ebitdaAcumulado,
+    margemEbitda: receita > 0 ? ebitdaAcumulado / receita : null,
+    ebitdaMedio3: media(completos.slice(-3).map((a) => a.ebitda)),
+    multiplo: colocado > 0 ? (valorHoje + devolvido) / colocado : null,
+    payback,
+    caixaColocado: colocado,
+  };
+}
+
+/** Custo direto do cultivo por conta no ano (como a análise enxerga: custeio geral no café). */
+export function custosPorConta(partidas: PartidaContabil[], cultivo: AtividadeRateio, ano: number): Map<string, number> {
+  const porConta = new Map<string, number>();
+  for (const p of partidasGerenciais(partidas)) {
+    if (p.categoria !== "Custeio" || p.atividade !== cultivo || !p.data.startsWith(`${ano}-`)) continue;
+    porConta.set(p.conta ?? "?", (porConta.get(p.conta ?? "?") ?? 0) + p.valorCentavos);
+  }
+  return porConta;
+}
+
+// ---------------- Saúde financeira do sítio ----------------
+
+export type SaudeAno = { ano: number; ebitda: number; juros: number; receita: number };
+
+/**
+ * EBITDA do sítio pela DRE: receita − custeio − despesas administrativas
+ * (antes de juros; a contabilidade não tem depreciação). Juros = despesas financeiras.
+ */
+export function saudeFinanceira(partidas: PartidaContabil[], anos: number[]): SaudeAno[] {
+  const dre = dreAnual(partidas, anos);
+  return [...dre].map(([ano, d]) => ({
+    ano,
+    receita: d.totalReceita,
+    ebitda: d.totalReceita + d.totalCusteio + d.despesasAdministrativas,
+    juros: -d.despesasFinanceiras,
+  }));
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PartidaContabil } from "../contabil/tipos";
-import { cdiMedioAnual, fatorCdiAno, resumirCultivo, serieInvestimento, serieSocios, tir, tirSocios, valorNoCdi, type AnoCultivo } from "./investimento";
+import { cdiMedioAnual, crescimentoAnual, fatorCdiAno, indicadoresCultivo, resumirCultivo, serieInvestimento, serieSocios, tir, tirSocios, valorNoCdi, type AnoCultivo } from "./investimento";
 
 const p = (data: string, categoria: PartidaContabil["categoria"], atividade: PartidaContabil["atividade"], valorCentavos: number, conta?: string): PartidaContabil => ({
   data,
@@ -95,6 +95,8 @@ describe("resumirCultivo", () => {
     margemDireta: resultado,
     resultado,
     depreciacao: 0,
+    juros: 0,
+    ebitda: resultado,
     investimento,
     capital,
     caixa: resultado - investimento,
@@ -140,5 +142,44 @@ describe("CDI", () => {
     // 1.000 aplicados no fim de 2023 rendem 2024 e 2025; 500 resgatados no fim de 2024 deixam de render 2025.
     expect(valorNoCdi([{ ano: 2023, valor: 1000 }, { ano: 2024, valor: -500 }], mensal, 2025)).toBe(Math.round(1000 * ano * ano - 500 * ano));
     expect(valorNoCdi([{ ano: 2022, valor: 1000 }], mensal, 2025)).toBeNull();
+  });
+});
+describe("indicadores de gestão", () => {
+  const ano = (a: number, receita: number, resultado: number, caixa: number): AnoCultivo => ({
+    ano: a,
+    receita,
+    custeio: receita - resultado,
+    margemDireta: resultado,
+    resultado,
+    depreciacao: 0,
+    juros: 0,
+    ebitda: resultado + 10,
+    investimento: 0,
+    capital: 0,
+    caixa,
+  });
+
+  it("crescimento anual: pontas com até 5 anos, médias de 3 anos a partir de 6", () => {
+    expect(crescimentoAnual([100, 121])).toBeCloseTo(0.21, 10);
+    expect(crescimentoAnual([100, 110, 121])).toBeCloseTo(0.1, 10);
+    // médias: início (100+100+100)/3 = 100, fim (200+200+200)/3 = 200, distância 3 anos
+    expect(crescimentoAnual([100, 100, 100, 200, 200, 200])).toBeCloseTo(2 ** (1 / 3) - 1, 10);
+    expect(crescimentoAnual([0, 100])).toBeNull();
+  });
+
+  it("anos com lucro, melhor/pior ano, EBITDA, múltiplo e payback", () => {
+    const serie = [ano(2021, 100, -50, -50), ano(2022, 100, 20, 20), ano(2023, 100, 40, 40)];
+    const i = indicadoresCultivo(serie, 30);
+    expect(i.anosComLucro).toBe(2);
+    expect(i.melhor?.ano).toBe(2023);
+    expect(i.pior?.ano).toBe(2021);
+    expect(i.ebitdaAcumulado).toBe(40);
+    expect(i.margemEbitda).toBeCloseTo(40 / 300, 10);
+    expect(i.multiplo).toBeCloseTo((30 + 60) / 50, 10); // colocou 50, devolveu 60, vale 30
+    expect(i.payback).toBe(2023); // acumulado: −50, −30, +10
+  });
+
+  it("sem recuperar o caixa, payback fica null", () => {
+    expect(indicadoresCultivo([ano(2021, 100, -50, -50), ano(2022, 100, 10, 10)], 0).payback).toBeNull();
   });
 });
