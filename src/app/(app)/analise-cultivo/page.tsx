@@ -277,6 +277,8 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
   const ateHoje = serie.length ? `${serie[0].ano}–hoje` : "";
   const investidoAteHoje = (r?.investimentoAcumulado ?? 0) + (corrente?.investimento ?? 0);
   const capitalAgora = mercado || (corrente ?? completos.at(-1))?.capital || 0;
+  // Investido pelos sócios: aportes − retiradas na conta Capital Sócio desde o 1º ano de movimento (sem depreciação).
+  const aportadoSocios = -partidas.filter((p) => p.categoria === "PL Capital Sócio" && Number(p.data.slice(0, 4)) > anos[0]).reduce((s, p) => s + p.valorCentavos, 0);
   const recentes = completos.slice(-3);
   const retornoAgora = capitalAgora > 0 && recentes.length ? recentes.reduce((s, a) => s + a.resultado, 0) / recentes.length / capitalAgora : null;
   const semBaseTir = r !== null && r.tir === null && r.investimentoAcumulado <= 0 && !mercado;
@@ -338,11 +340,11 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
               nota="resultado + depreciação − investimentos, somados no período"
             />
             <Numero
-              rotulo="Capital investido hoje"
+              rotulo={mercado ? "Valor de mercado (porteira fechada)" : "Capital investido hoje"}
               valor={`R$ ${reaisCurto(capitalAgora)}`}
               nota={
                 mercado
-                  ? `sítio porteira fechada a mercado · contábil R$ ${reaisCurto(completos.at(-1)?.capital ?? 0)}, valorização de R$ ${reaisCurto(mercado - (completos.at(-1)?.capital ?? 0))}`
+                  ? `investido pelos sócios desde ${anos[1]} (aportes − retiradas): R$ ${reaisCurto(aportadoSocios)} · valorização de R$ ${reaisCurto(mercado - aportadoSocios)}`
                   : nome === DESTINO_INVESTIMENTO_GERAL
                     ? "bens pelo valor depreciado — falta o valor de mercado do sítio (abaixo)"
                     : corrente?.investimento
@@ -430,7 +432,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
                   <th className="py-2 text-right font-medium">Margem %</th>
                   <th className="py-2 text-right font-medium">Resultado</th>
                   <th className="py-2 text-right font-medium">Investido</th>
-                  <th className="py-2 text-right font-medium">{mercado ? "Bens contábeis 31/12" : "Capital 31/12"}</th>
+                  <th className="py-2 text-right font-medium">{mercado ? "Bens 31/12 (após depreciação)" : "Capital 31/12"}</th>
                   <th className="py-2 text-right font-medium">{mercado ? `Retorno s/ R$ ${reaisCurto(mercado)}` : "Retorno s/ capital"}</th>
                 </tr>
               </thead>

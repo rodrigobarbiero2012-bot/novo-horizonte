@@ -12,7 +12,7 @@ import { conferir, type Referencia } from "../src/lib/importacao/conferencia";
 
 async function main() {
   const referencia: Referencia = JSON.parse(fs.readFileSync(path.join(process.cwd(), "data", "import", "referencia.json"), "utf-8"));
-  const { anos, comparacoes, divergencias } = conferir(await carregarPartidas(prisma), referencia);
+  const { anos, comparacoes, divergencias } = conferir(await carregarPartidas(prisma, { soPelaConta: true }), referencia);
   const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   if (!divergencias.length) {
     console.log(`✔ Banco confere com a planilha: ${comparacoes} valores de DRE e Balanço, ${anos[0]}–${anos.at(-1)}.`);
