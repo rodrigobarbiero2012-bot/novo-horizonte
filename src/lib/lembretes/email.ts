@@ -14,7 +14,8 @@ export type DadosLembrete = {
   receber: TituloLembrete[];
   whatsappPendentes: number;
   mes?: { receita: number; gastos: number; resultado: number }; // centavos, do 1º dia do mês até hoje
-  cotacoes?: { nome: string; valor: string; data: string }[];
+  /** `variacao`: fração sobre a cotação de uma semana antes (0,012 = +1,2%); null sem cotação anterior. */
+  cotacoes?: { nome: string; valor: string; data: string; variacao?: number | null }[];
   diasDesdeBackup?: number | null;
 };
 
@@ -38,6 +39,10 @@ export function deveEnviar(d: DadosLembrete): boolean {
   const r = faixas(d.receber, d.hoje);
   return p.vencidos.length + p.proximos.length + r.vencidos.length + d.whatsappPendentes > 0;
 }
+
+/** 0.0123 → "+1,2%"; −0.004 → "−0,4%". */
+export const variacaoTexto = (v: number) =>
+  `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
 const soma = (ts: TituloLembrete[]) => ts.reduce((s, t) => s + t.valorCentavos, 0);
 const escapar = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -97,10 +102,16 @@ export function montarEmail(d: DadosLembrete): { assunto: string; html: string; 
     texto.push(`\nMês até hoje: receita R$ ${reais(d.mes.receita)}, gastos R$ ${reais(d.mes.gastos)}, resultado R$ ${reais(d.mes.resultado)}.`);
   }
   if (d.semanal && d.cotacoes?.length) {
+    const varHtml = (v: number | null | undefined) =>
+      v === null || v === undefined
+        ? ""
+        : ` <span style="color:${v > 0 ? "#1c4332" : v < 0 ? "#b91c1c" : "#78716c"}">${v > 0 ? "▲" : v < 0 ? "▼" : "="} ${variacaoTexto(v)} na semana</span>`;
     html.push(
-      `<h3 style="margin:20px 0 6px;font-size:15px;color:#1c4332">Cotações</h3><p style="margin:0;font-size:14px">${d.cotacoes.map((c) => `${escapar(c.nome)}: <strong>${escapar(c.valor)}</strong> <span style="color:#78716c">(${dataBr(c.data)})</span>`).join("<br>")}</p>`,
+      `<h3 style="margin:20px 0 6px;font-size:15px;color:#1c4332">Cotações</h3><p style="margin:0;font-size:14px">${d.cotacoes.map((c) => `${escapar(c.nome)}: <strong>${escapar(c.valor)}</strong>${varHtml(c.variacao)} <span style="color:#78716c">(${dataBr(c.data)})</span>`).join("<br>")}</p>`,
     );
-    texto.push(`\nCotações: ${d.cotacoes.map((c) => `${c.nome} ${c.valor} (${dataBr(c.data)})`).join("; ")}.`);
+    texto.push(
+      `\nCotações: ${d.cotacoes.map((c) => `${c.nome} ${c.valor}${c.variacao === null || c.variacao === undefined ? "" : ` (${variacaoTexto(c.variacao)} na semana)`} (${dataBr(c.data)})`).join("; ")}.`,
+    );
   }
   if (d.semanal && (d.diasDesdeBackup === null || (d.diasDesdeBackup ?? 0) > 30)) {
     const msg = d.diasDesdeBackup === null ? "Nenhum backup baixado ainda." : `Último backup há ${d.diasDesdeBackup} dias.`;

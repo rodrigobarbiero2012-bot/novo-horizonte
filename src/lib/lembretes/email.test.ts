@@ -43,4 +43,19 @@ describe("montarEmail", () => {
     expect(e.html).toContain("Café arábica");
     expect(e.html).toContain("Nenhum backup baixado ainda");
   });
+  it("cotações trazem a variação na semana, com sinal e cor; sem cotação anterior, nada", () => {
+    const e = montarEmail({
+      ...base,
+      semanal: true,
+      cotacoes: [
+        { nome: "Café arábica", valor: "R$ 1.619,85", data: "2026-10-30", variacao: 0.0123 },
+        { nome: "Dólar", valor: "R$ 5,40", data: "2026-10-30", variacao: -0.004 },
+        { nome: "Maracujá", valor: "R$ 4,00", data: "2026-10-30", variacao: null },
+      ],
+    });
+    expect(e.html).toContain("▲ +1,2% na semana");
+    expect(e.html).toContain("▼ −0,4% na semana");
+    expect(e.texto).toContain("Café arábica R$ 1.619,85 (+1,2% na semana) (30/10/2026)");
+    expect(e.texto).toContain("Maracujá R$ 4,00 (30/10/2026)");
+  });
 });

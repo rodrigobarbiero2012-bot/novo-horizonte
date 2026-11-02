@@ -51,10 +51,26 @@ export async function coletarDados(semanal: boolean): Promise<DadosLembrete> {
   if (semanal) {
     const r = resumoPeriodo(await carregarPartidas(prisma), { inicio: `${hoje.slice(0, 7)}-01`, fim: hoje });
     dados.mes = { receita: r.receita, gastos: r.custeio + r.despesas, resultado: r.resultado };
-    dados.cotacoes = cotacoes.flatMap((c) => {
+    // Variação na semana: contra a última cotação de até 7 dias antes da mais recente (fins de semana e feriados não têm cotação).
+    const anteriores = await Promise.all(
+      cotacoes.map((c) =>
+        c ? prisma.cotacao.findFirst({ where: { produto: c.produto, data: { lte: new Date(somarDias(c.data.toISOString().slice(0, 10), -7)) } }, orderBy: { data: "desc" } }) : null,
+      ),
+    );
+    dados.cotacoes = cotacoes.flatMap((c, i) => {
       if (!c) return [];
       const p = PRODUTOS[c.produto as ChaveProduto];
-      return p ? [{ nome: p.nome, valor: `${c.valor.toLocaleString("pt-BR", { minimumFractionDigits: p.casas, maximumFractionDigits: p.casas })} ${p.unidade}`, data: c.data.toISOString().slice(0, 10) }] : [];
+      const anterior = anteriores[i];
+      return p
+        ? [
+            {
+              nome: p.nome,
+              valor: `${c.valor.toLocaleString("pt-BR", { minimumFractionDigits: p.casas, maximumFractionDigits: p.casas })} ${p.unidade}`,
+              data: c.data.toISOString().slice(0, 10),
+              variacao: anterior && anterior.valor > 0 ? c.valor / anterior.valor - 1 : null,
+            },
+          ]
+        : [];
     });
     dados.diasDesdeBackup = ultimoBackup ? Math.round((Date.parse(hoje) - Date.parse(hojeSP(ultimoBackup.em))) / 86_400_000) : null;
   }
