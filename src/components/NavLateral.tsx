@@ -46,7 +46,7 @@ const ITENS: Item[] = [
   {
     grupo: "Configurações",
     itens: [
-      { href: "/contas", rotulo: "Plano de contas" },
+      { href: "/contas", rotulo: "Contas e backup" },
       { href: "/lembretes", rotulo: "Lembretes por e-mail" },
       { href: "/whatsapp", rotulo: "WhatsApp" },
       { href: "/convites", rotulo: "Convidar sócio" }, // temporário

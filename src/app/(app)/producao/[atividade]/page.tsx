@@ -381,7 +381,7 @@ async function Conteudo({ params, searchParams }: PageProps<"/producao/[atividad
             {contasReceita.length ? (
               <FormNovaVenda slug={slug} unidade={def.unidade} unidadeCurta={u} contas={contasReceita} hoje={hoje} />
             ) : (
-              <p className="text-sm text-amber-800">Cadastre uma conta de receita no Plano de contas antes de registrar vendas.</p>
+              <p className="text-sm text-amber-800">Cadastre uma conta de receita em Contas e backup antes de registrar vendas.</p>
             )}
           </Cartao>
 

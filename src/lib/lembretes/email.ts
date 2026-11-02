@@ -115,8 +115,8 @@ export function montarEmail(d: DadosLembrete): { assunto: string; html: string; 
   }
   if (d.semanal && (d.diasDesdeBackup === null || (d.diasDesdeBackup ?? 0) > 30)) {
     const msg = d.diasDesdeBackup === null ? "Nenhum backup baixado ainda." : `Último backup há ${d.diasDesdeBackup} dias.`;
-    html.push(`<p style="margin:16px 0 0;color:#b45309">💾 ${msg} Baixe em Plano de contas → Backup completo.</p>`);
-    texto.push(`\n${msg} Baixe em Plano de contas → Backup completo.`);
+    html.push(`<p style="margin:16px 0 0;color:#b45309">💾 ${msg} Baixe em Contas e backup → Backup completo.</p>`);
+    texto.push(`\n${msg} Baixe em Contas e backup → Backup completo.`);
   }
   if (!html.length) {
     html.push(`<p style="margin:12px 0 0">Nada vencido nem vencendo nos próximos dias. 👍</p>`);

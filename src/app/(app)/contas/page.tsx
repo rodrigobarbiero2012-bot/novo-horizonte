@@ -8,7 +8,7 @@ import { exigirUsuario } from "@/lib/usuario";
 import { criarConta } from "./acoes";
 import { Pagina } from "@/components/Pagina";
 
-export const metadata: Metadata = { title: "Plano de contas" };
+export const metadata: Metadata = { title: "Contas e backup" };
 
 async function Conteudo() {
   await exigirUsuario();
@@ -21,7 +21,7 @@ async function Conteudo() {
   return (
     <>
       <Cabecalho
-        titulo="Plano de contas"
+        titulo="Contas e backup"
         subtitulo="A categoria define a linha da DRE ou do Balanço; a atividade separa café, maracujá, pecuária."
       >
         <BotaoExportar href="/api/exportar/backup" rotulo="Backup completo" />

@@ -87,7 +87,7 @@ async function Conteudo() {
         {passivos.length && juros.length ? (
           <FormFinanciamento passivos={passivos} juros={juros} pagamento={pagamento} hoje={hoje} />
         ) : (
-          <p className="text-sm text-amber-800">Cadastre no Plano de contas uma conta “Passivo Empréstimo” e uma “Despesa Financeira”.</p>
+          <p className="text-sm text-amber-800">Cadastre em Contas e backup uma conta “Passivo Empréstimo” e uma “Despesa Financeira”.</p>
         )}
       </Cartao>
 
