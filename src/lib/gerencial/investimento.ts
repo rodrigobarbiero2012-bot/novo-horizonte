@@ -1,4 +1,5 @@
 import { ehEstoqueAnimais } from "../contabil/painel";
+import { balancoAnual } from "../contabil/relatorios";
 import type { Atividade, PartidaContabil } from "../contabil/tipos";
 import { depreciacaoNoAno, type Camada } from "./depreciacao";
 import { ATIVIDADES_RATEIO, ehAtividadeRateio, resultadoPorAtividade, type AtividadeRateio, type Criterio } from "./rateio";
@@ -282,4 +283,43 @@ export function valorNoCdi(aplicacoes: { ano: number; valor: number }[], mensal:
     total += valor * f;
   }
   return Math.round(total);
+}
+
+// ---------------- Retorno do dinheiro dos sócios (sítio todo) ----------------
+
+/**
+ * Tudo o que a aba "Sítio todo (sócios)" e o Painel mostram, num lugar só:
+ * aportes, patrimônio, TIR pelo balanço e com o sítio a mercado, e a
+ * comparação com o CDI. `mercado` = valor do sítio porteira fechada (0 se não informado).
+ */
+export function retornoDosSocios(partidas: PartidaContabil[], anos: number[], anoAtual: number, mercado: number, cdi: Record<string, number>) {
+  const balanco = balancoAnual(partidas, anos);
+  const patrimonio = new Map([...balanco].map(([a, b]) => [a, b.totalPL]));
+  const completos = serieSocios(partidas, anos.filter((a) => a < anoAtual), patrimonio);
+  const corrente = serieSocios(partidas, [anoAtual], patrimonio)[0];
+  const aportadoLiquido = [...completos.slice(1), corrente].reduce((s, a) => s + a.aportes - a.retiradas, 0);
+  const aMercado = (a: number) => patrimonioAMercado(patrimonio.get(a) ?? 0, balanco.get(a)?.imobilizado ?? 0, mercado);
+  const fim = completos.at(-1)?.ano ?? anoAtual - 1;
+  const semSitio = (patrimonio.get(fim) ?? 0) - (balanco.get(fim)?.imobilizado ?? 0); // patrimônio sem o imobilizado contábil
+  // Começa no que foi aportado; termina com o sítio pelo valor pedido.
+  const tirCom = (valorSitio: number) => tirSocios(completos.map((a, i) => (i === completos.length - 1 ? { ...a, patrimonio: semSitio + valorSitio } : a)));
+  const noCdi = completos.length
+    ? valorNoCdi([{ ano: completos[0].ano, valor: completos[0].patrimonio }, ...completos.slice(1).map((a) => ({ ano: a.ano, valor: a.aportes - a.retiradas }))], cdi, fim)
+    : null;
+  return {
+    completos,
+    corrente,
+    fim,
+    aportadoLiquido,
+    plHoje: patrimonio.get(anoAtual) ?? 0,
+    patrimonioMercadoHoje: mercado ? aMercado(anoAtual) : null,
+    patrimonioFim: patrimonio.get(fim) ?? 0,
+    semSitio,
+    tirContabil: tirSocios(completos),
+    tirMercado: mercado ? tirCom(mercado) : null,
+    tirCom,
+    noCdi,
+    cdiPeriodo: completos.length > 1 ? cdiMedioAnual(cdi, completos[1].ano, fim) : null,
+    empate: noCdi !== null ? noCdi - semSitio : null, // valor do sítio que empata com o CDI
+  };
 }

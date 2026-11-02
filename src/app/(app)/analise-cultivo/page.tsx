@@ -3,12 +3,11 @@ import type { Metadata } from "next";
 import { FormValorTerra } from "@/components/gerencial/Formularios";
 import { Pagina } from "@/components/Pagina";
 import { Abas, Cabecalho, Cartao } from "@/components/ui";
-import { balancoAnual } from "@/lib/contabil/relatorios";
 import { anosComMovimento, partidasDoRazao } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
 import { dataBr, percentual, reais, reaisCurto } from "@/lib/formato";
 import { hojeSP } from "@/lib/hoje";
-import { cdiMedioAnual, CUSTEIO_COMO_INVESTIMENTO, DESTINO_CUSTEIO_GERAL, DESTINO_INVESTIMENTO_GERAL, patrimonioAMercado, valorNoCdi, resumirCultivo, serieInvestimento, serieSocios, tirSocios, type AnoCultivo } from "@/lib/gerencial/investimento";
+import { cdiMedioAnual, CUSTEIO_COMO_INVESTIMENTO, DESTINO_CUSTEIO_GERAL, DESTINO_INVESTIMENTO_GERAL, resumirCultivo, retornoDosSocios, serieInvestimento, valorNoCdi, type AnoCultivo } from "@/lib/gerencial/investimento";
 import { cdiMensal, rateioManual, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
 import { CRITERIOS, ehCriterio, type AtividadeRateio, type Criterio } from "@/lib/gerencial/rateio";
 import { ATIVIDADES_PRODUCAO, ehSlugProducao, type SlugProducao } from "@/lib/producao/atividades";
@@ -118,24 +117,10 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
 
   // ---------------- Sítio todo: o dinheiro dos sócios ----------------
   if (aba === "socios") {
-    const balanco = balancoAnual(partidas, anos);
-    const patrimonio = new Map([...balanco].map(([a, b]) => [a, b.totalPL]));
-    const completos = serieSocios(partidas, anos.filter((a) => a < anoAtual), patrimonio);
-    const corrente = serieSocios(partidas, [anoAtual], patrimonio)[0];
-    const aportadoLiquido = [...completos.slice(1), corrente].reduce((s, a) => s + a.aportes - a.retiradas, 0);
-    const tirContabil = tirSocios(completos);
-    const aMercado = (a: number) => patrimonioAMercado(patrimonio.get(a) ?? 0, balanco.get(a)?.imobilizado ?? 0, terra?.valorCentavos ?? 0);
-    const tirMercado = terra ? tirSocios(completos.map((a, i) => (i === completos.length - 1 ? { ...a, patrimonio: aMercado(a.ano) } : a))) : null;
-    const plHoje = patrimonio.get(anoAtual) ?? 0;
-    // Comparação com o CDI: o mesmo dinheiro (patrimônio inicial + aportes líquidos de cada ano) aplicado no CDI até o fim do último ano fechado.
-    const fim = completos.at(-1)?.ano ?? anoAtual - 1;
-    const noCdi = completos.length
-      ? valorNoCdi([{ ano: completos[0].ano, valor: completos[0].patrimonio }, ...completos.slice(1).map((a) => ({ ano: a.ano, valor: a.aportes - a.retiradas }))], cdi, fim)
-      : null;
-    const cdiPeriodo = completos.length > 1 ? cdiMedioAnual(cdi, completos[1].ano, fim) : null;
-    const semSitio = (patrimonio.get(fim) ?? 0) - (balanco.get(fim)?.imobilizado ?? 0); // patrimônio sem o imobilizado contábil
-    const tirCom = (valorSitio: number) => tirSocios(completos.map((a, i) => (i === completos.length - 1 ? { ...a, patrimonio: semSitio + valorSitio } : a)));
-    const empate = noCdi !== null ? noCdi - semSitio : null; // valor do sítio que empata com o CDI
+    const s = retornoDosSocios(partidas, anos, anoAtual, terra?.valorCentavos ?? 0, cdi);
+    const { completos, corrente, aportadoLiquido, tirContabil, tirMercado, plHoje, fim, noCdi, cdiPeriodo, semSitio, tirCom, empate } = s;
+    const aMercado = () => s.patrimonioMercadoHoje ?? plHoje;
+    const patrimonio = new Map([...completos, corrente].map((a) => [a.ano, a.patrimonio]));
     return (
       <>
         {cabecalho}
@@ -143,7 +128,7 @@ async function Conteudo({ searchParams }: PageProps<"/analise-cultivo">) {
           <Numero rotulo={`Aportado pelos sócios desde ${anos[1]}`} valor={`R$ ${reaisCurto(aportadoLiquido)}`} nota="aportes − retiradas (conta Capital Sócio)" />
           <Numero
             rotulo="Patrimônio hoje"
-            valor={`R$ ${reaisCurto(terra ? aMercado(anoAtual) : plHoje)}`}
+            valor={`R$ ${reaisCurto(terra ? aMercado() : plHoje)}`}
             nota={terra ? `com o sítio porteira fechada a R$ ${reaisCurto(terra.valorCentavos)}, menos as dívidas · contábil R$ ${reaisCurto(plHoje)}` : "ativos − dívidas, pelo balanço"}
           />
           <Numero

@@ -9,7 +9,8 @@ import { balancoAnual, dreAnual } from "@/lib/contabil/relatorios";
 import { ATIVIDADES_CRONOGRAMA, PENDENCIAS_MODELO } from "@/lib/cronograma/modelos";
 import { CHAVE_ULTIMA_EXECUCAO } from "@/lib/cotacoes/atualizar";
 import { PRODUTOS, type ChaveProduto } from "@/lib/cotacoes/produtos";
-import { taxasDepreciacao } from "@/lib/gerencial/parametros";
+import { retornoDosSocios } from "@/lib/gerencial/investimento";
+import { cdiMensal, taxasDepreciacao, valorTerra } from "@/lib/gerencial/parametros";
 import { ATIVIDADES_PRODUCAO } from "@/lib/producao/atividades";
 import { anosComMovimento, contasAtivas, partidasDoRazao, resumoCotacoes } from "@/lib/consultas";
 import { prisma } from "@/lib/db";
@@ -43,6 +44,9 @@ async function Conteudo() {
     prisma.registroAuditoria.findFirst({ where: { entidade: "Backup" }, orderBy: { em: "desc" }, select: { em: true } }),
     prisma.configuracao.findUnique({ where: { chave: CHAVE_ULTIMA_EXECUCAO } }),
   ]);
+  // Retorno do dinheiro dos sócios (o mesmo cálculo da Análise por cultivo → Sítio todo).
+  const [terra, cdi] = await Promise.all([valorTerra(), cdiMensal()]);
+  const socios = retornoDosSocios(partidas, anos, anoSP(), terra?.valorCentavos ?? 0, cdi);
   // Fontes de cotação que falharam na última execução automática.
   const ultimaExecucao = execucaoCotacoes?.valor as { em: string; resultado: Record<string, { erro?: string }> } | undefined;
   const fontesComErro = Object.entries(ultimaExecucao?.resultado ?? {}).filter(([, r]) => r.erro);
@@ -121,6 +125,58 @@ async function Conteudo() {
           nota={`${percentual(divida, receita12m)} da receita dos últimos 12 meses`}
         />
       </div>
+
+      {/* 2. Retorno do investimento (objetivo principal) */}
+      <Cartao className="mb-6 p-4">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-stone-800">Retorno do investimento no sítio</h2>
+          <Link href="/analise-cultivo?cultivo=socios" className="text-sm text-folha-700 hover:underline">
+            Ver análise por cultivo →
+          </Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Valor de mercado</p>
+            <p className={`text-xl font-semibold tabular-nums ${terra ? "" : "text-stone-300"}`}>{terra ? `R$ ${reaisCurto(terra.valorCentavos)}` : "—"}</p>
+            <p className="text-xs text-stone-500">{terra ? `porteira fechada, estimado em ${dataBr(terra.data)}` : "informe na Análise por cultivo → Café"}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Investido pelos sócios</p>
+            <p className="text-xl font-semibold tabular-nums">R$ {reaisCurto(socios.aportadoLiquido)}</p>
+            <p className="text-xs text-stone-500">aportes − retiradas desde {anos[1]}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Retorno ao ano com a valorização</p>
+            <p className={`text-xl font-semibold tabular-nums ${socios.tirMercado === null ? "text-stone-300" : socios.tirMercado < 0 ? "neg" : "text-folha-700"}`}>
+              {socios.tirMercado === null ? "—" : percentual(socios.tirMercado, 1)}
+            </p>
+            <p className="text-xs text-stone-500">
+              {socios.cdiPeriodo !== null ? `CDI no período: ${percentual(socios.cdiPeriodo, 1)} ao ano` : "TIR"} · {anos[0]}–{socios.fim}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Só a operação</p>
+            <p className={`text-xl font-semibold tabular-nums ${socios.tirContabil === null ? "text-stone-300" : socios.tirContabil < 0 ? "neg" : ""}`}>
+              {socios.tirContabil === null ? "—" : percentual(socios.tirContabil, 1)}
+            </p>
+            <p className="text-xs text-stone-500">retorno ao ano pelo balanço, sem a valorização</p>
+          </div>
+        </div>
+        {terra && socios.noCdi !== null && socios.patrimonioFim !== null && (
+          <p className="mt-3 text-sm text-stone-700">
+            {socios.semSitio + terra.valorCentavos >= socios.noCdi ? (
+              <>
+                O sítio vale <strong className="text-folha-700">R$ {reaisCurto(socios.semSitio + terra.valorCentavos - socios.noCdi)} a mais</strong> do que o mesmo dinheiro aplicado no CDI
+                {socios.empate !== null && socios.empate > 0 ? ` (empataria se valesse R$ ${reaisCurto(socios.empate)})` : ""}.
+              </>
+            ) : (
+              <>
+                O sítio vale <strong className="neg">R$ {reaisCurto(socios.noCdi - socios.semSitio - terra.valorCentavos)} a menos</strong> do que o mesmo dinheiro aplicado no CDI.
+              </>
+            )}
+          </p>
+        )}
+      </Cartao>
 
       {/* 5. O que pede atenção */}
       <Cartao className="mb-6 border-amber-300 bg-amber-50/60 p-4">
